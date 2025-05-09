@@ -1,16 +1,25 @@
-
 import React from "react";
 import { AlertCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBilling } from "@/contexts/BillingContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 
+interface Product {
+  id: string;
+  name: string;
+  stock: number;
+  // other properties as needed
+}
+
 const StockAlerts: React.FC = () => {
   const { products } = useBilling();
   const isMobile = useIsMobile();
   
-  const outOfStockProducts = products.filter(product => product.stock === 0);
-  const lowStockProducts = products.filter(product => product.stock > 0 && product.stock <= 5);
+  // Type assertion to ensure TypeScript recognizes the stock property
+  const typedProducts = products as Product[];
+  
+  const outOfStockProducts = typedProducts.filter(product => product.stock === 0);
+  const lowStockProducts = typedProducts.filter(product => product.stock > 0 && product.stock <= 5);
   
   if (outOfStockProducts.length === 0 && lowStockProducts.length === 0) {
     return null;

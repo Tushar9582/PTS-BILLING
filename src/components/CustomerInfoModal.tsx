@@ -40,7 +40,7 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] animate-fade-in">
+      <DialogContent className="sm:max-w-[425px] animate-fade-in max-w-[95vw] mx-auto">
         <DialogHeader>
           <DialogTitle>Customer Information</DialogTitle>
         </DialogHeader>
@@ -55,6 +55,8 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
                 onChange={handleChange}
                 placeholder="Enter customer name"
                 required
+                className="w-full"
+                autoComplete="name"
               />
             </div>
             <div className="space-y-2">
@@ -66,14 +68,17 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
                 onChange={handleChange}
                 placeholder="Enter phone number"
                 required
+                className="w-full"
+                type="tel"
+                autoComplete="tel"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button type="submit">Continue</Button>
+            <Button type="submit" className="w-full sm:w-auto">Continue</Button>
           </DialogFooter>
         </form>
       </DialogContent>

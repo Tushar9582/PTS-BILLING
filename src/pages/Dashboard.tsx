@@ -1,8 +1,7 @@
-
 import React from "react";
 import { useBilling } from "@/contexts/BillingContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, ShoppingCart, FileText, Calendar, TrendingUp, TrendingDown } from "lucide-react";
+import { Package, ShoppingCart, FileText, Calendar, TrendingUp, TrendingDown, Coffee, Store, ShoppingBag, Utensils } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import Layout from "@/components/Layout";

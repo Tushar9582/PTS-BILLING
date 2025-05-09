@@ -95,3 +95,53 @@ export function getBusinessThemeColor(type: string): string {
       return 'blue';
   }
 }
+
+// Add TypeScript interfaces to ensure proper typing
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  category: string;
+  description?: string;
+  image?: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+}
+
+export interface Customer {
+  name: string;
+  phone: string;
+}
+
+export interface SaleItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  total: number;
+}
+
+export interface Sale {
+  id: string;
+  date: string;
+  items: SaleItem[];
+  subtotal: number;
+  tax: number;
+  discount: number;
+  grandTotal: number;
+  customer?: Customer;
+}
+
+export interface BusinessConfig {
+  name: string;
+  type: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  taxRate?: number;
+}

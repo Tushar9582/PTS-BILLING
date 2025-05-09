@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import {
   Dialog,
@@ -12,17 +11,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { useCustomerStore } from "@/store/customerStore";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface CustomerInfoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (customerInfo: { name: string; phone: string }) => void;
+  billDetails: string;
 }
 
 const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
   open,
   onOpenChange,
   onSubmit,
+  billDetails,
 }) => {
   const { toast } = useToast();
   const { recentCustomers, addCustomer } = useCustomerStore();
@@ -31,36 +34,73 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
     phone: "",
   });
   const [showRecent, setShowRecent] = React.useState(false);
+  const [sendReceipt, setSendReceipt] = React.useState(false);
+  const [deliveryMethod, setDeliveryMethod] = React.useState<"whatsapp" | "sms">("whatsapp");
 
   useEffect(() => {
-    // Reset state when modal opens
     if (open) {
       setShowRecent(recentCustomers.length > 0);
+      setSendReceipt(false);
+      setDeliveryMethod("whatsapp");
     }
   }, [open, recentCustomers.length]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customerInfo.name && !customerInfo.phone) {
-      toast({
-        title: "Anonymous Customer",
-        description: "Continuing with walk-in customer",
-      });
-      onSubmit({ name: "Walk-in Customer", phone: "" });
-    } else {
-      addCustomer(customerInfo);
-      onSubmit(customerInfo);
-      toast({
-        title: "Customer Added",
-        description: `Bill created for ${customerInfo.name}`,
-      });
-    }
-    setCustomerInfo({ name: "", phone: "" });
+  const formatWhatsAppMessage = () => {
+    return `Dear ${customerInfo.name || 'Valued Customer'},\n\nHere's your receipt:\n\n${billDetails}\n\nThank you for shopping with us!`;
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setCustomerInfo((prev) => ({ ...prev, [name]: value }));
+  const formatSMSMessage = () => {
+    // Extract key information for SMS
+    const lines = billDetails.split('\n');
+    const items = lines.filter(line => line.includes('x') && line.includes('=')).slice(0, 3);
+    const totalLine = lines.find(line => line.startsWith('Total:'));
+    
+    return `${customerInfo.name || 'Customer'}, your receipt:\n${items.join('\n')}\n${totalLine}\nThank you!`;
+  };
+
+  const sendReceiptToCustomer = (phone: string) => {
+    if (!phone) return;
+
+    const formattedPhone = phone.replace(/[^0-9]/g, ''); // Remove any non-numeric characters
+    let url = '';
+
+    if (deliveryMethod === "whatsapp") {
+      const message = encodeURIComponent(formatWhatsAppMessage());
+      url = `https://wa.me/${formattedPhone}?text=${message}`;
+    } else {
+      const message = encodeURIComponent(formatSMSMessage());
+      url = `sms:${formattedPhone}?body=${message}`;
+    }
+
+    // Open the URL in a new tab
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      // First complete the sale
+      if (!customerInfo.name && !customerInfo.phone) {
+        onSubmit({ name: "Walk-in Customer", phone: "" });
+      } else {
+        addCustomer(customerInfo);
+        onSubmit(customerInfo);
+      }
+
+      // Then send receipt if requested
+      if (sendReceipt && customerInfo.phone) {
+        sendReceiptToCustomer(customerInfo.phone);
+        toast.success(`Receipt sent via ${deliveryMethod.toUpperCase()}!`);
+      }
+
+      // Close modal and reset
+      onOpenChange(false);
+      setCustomerInfo({ name: "", phone: "" });
+      
+    } catch (error) {
+      toast.error("Failed to complete transaction. Please try again.");
+    }
   };
 
   const selectRecentCustomer = (customer: { name: string; phone: string }) => {
@@ -77,6 +117,7 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
         <DialogHeader>
           <DialogTitle>Customer Information</DialogTitle>
         </DialogHeader>
+        
         <form onSubmit={handleSubmit}>
           {showRecent && (
             <div className="mb-4">
@@ -103,7 +144,7 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
                 id="name"
                 name="name"
                 value={customerInfo.name}
-                onChange={handleChange}
+                onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
                 placeholder="Enter customer name"
                 className="w-full"
                 autoComplete="name"
@@ -115,25 +156,64 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
                 id="phone"
                 name="phone"
                 value={customerInfo.phone}
-                onChange={handleChange}
+                onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
                 placeholder="Enter phone number"
                 className="w-full"
                 type="tel"
                 autoComplete="tel"
               />
             </div>
+          
+            {customerInfo.phone && (
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="send-receipt" 
+                    checked={sendReceipt}
+                    onCheckedChange={(checked) => setSendReceipt(!!checked)}
+                  />
+                  <Label htmlFor="send-receipt">Send receipt to customer</Label>
+                </div>
+
+                {sendReceipt && (
+                  <div className="space-y-3">
+                    <RadioGroup 
+                      value={deliveryMethod} 
+                      onValueChange={(value) => setDeliveryMethod(value as "whatsapp" | "sms")}
+                      className="flex gap-4"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="whatsapp" id="whatsapp" />
+                        <Label htmlFor="whatsapp">WhatsApp</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="sms" id="sms" />
+                        <Label htmlFor="sms">SMS</Label>
+                      </div>
+                    </RadioGroup>
+
+                    <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md">
+                      <Label>Receipt Preview:</Label>
+                      <div className="mt-2 text-sm whitespace-pre-wrap overflow-y-auto max-h-40">
+                        {deliveryMethod === "whatsapp" ? formatWhatsAppMessage() : formatSMSMessage()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+          
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button type="submit" variant="neon" className="w-full sm:w-auto">Continue</Button>
-            <Button type="submit" onClick={(e) => {
-              e.preventDefault();
-              onSubmit({ name: "Walk-in Customer", phone: "" });
-              onOpenChange(false);
-            }} variant="ghost" className="w-full sm:w-auto text-sm">
-              Skip (Walk-in)
+            <Button 
+              type="submit" 
+              variant="default" 
+              className="w-full sm:w-auto"
+            >
+              {sendReceipt ? `Complete & Send via ${deliveryMethod.toUpperCase()}` : 'Complete Sale'}
             </Button>
           </DialogFooter>
         </form>

@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useBilling } from "@/contexts/BillingContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -23,6 +22,27 @@ const PointOfSale = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [customerInfo, setCustomerInfo] = useState({ name: "", phone: "" });
   const isMobile = useIsMobile();
+
+    // Generate formatted bill details
+    const generateBillDetails = () => {
+      let billText = `Receipt from ${businessConfig?.name || 'Our Store'}\n\n`;
+      billText += `Date: ${new Date().toLocaleDateString()}\n`;
+      billText += `Time: ${new Date().toLocaleTimeString()}\n\n`;
+      billText += "Items Purchased:\n";
+      
+      cart.forEach(item => {
+        billText += `${item.name} - ${item.quantity} x ${formatCurrency(item.price)} = ${formatCurrency(item.price * item.quantity)}\n`;
+      });
+      
+      billText += `\nSubtotal: ${formatCurrency(subtotal)}\n`;
+      billText += `Tax (${taxRate}%): ${formatCurrency(tax)}\n`;
+      billText += `Total: ${formatCurrency(total)}\n\n`;
+      billText += `Payment Method: ${paymentMethod.toUpperCase()}\n`;
+      billText += `Thank you for your purchase!`;
+      
+      return billText;
+    };
+  
   
   // Filter products by category and search query
   const filteredProducts = products.filter(product => {
@@ -50,12 +70,10 @@ const PointOfSale = () => {
     setCustomerInfo(info);
     setShowCustomerModal(false);
     
-    // Fix the arguments passed to completeSale
     completeSale(paymentMethod, info);
     toast.success("Payment successful! Receipt generated.");
     if (isMobile) setShowCart(false);
   };
-  
   // Mobile cart toggle
   const toggleCart = () => {
     setShowCart(!showCart);
@@ -108,48 +126,32 @@ const PointOfSale = () => {
             <TabsContent value={activeCategory} className="mt-6">
               {filteredProducts.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-                  {filteredProducts.map(product => {
-                    // TypeScript can't infer the stock property, so we'll use a type assertion
-                    const productStock = (product as any).stock || 0;
-                    return (
-                      <Card 
-                        key={product.id}
-                        onClick={() => {
-                          if (productStock === 0) {
-                            toast.error(`${product.name} is out of stock`);
-                            return;
-                          }
-                          addToCart(product);
-                          if (isMobile) toast.success(`${product.name} added to cart`);
-                        }}
-                        className={`cursor-pointer hover:shadow-md transition-all duration-200 ${
-                          productStock === 0 ? 'opacity-60' : 'hover:scale-105'
-                        }`}
-                      >
-                        <CardContent className="p-3 md:p-4 flex flex-col items-center">
-                          <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                            {product.imageUrl ? (
-                              <img 
-                                src={product.imageUrl} 
-                                alt={product.name} 
-                                className="w-full h-full object-cover rounded-full"
-                              />
-                            ) : (
-                              <Package className="h-6 w-6 md:h-8 md:w-8 text-billing-secondary" />
-                            )}
-                          </div>
-                          <h3 className="font-medium text-center truncate w-full text-sm md:text-base">{product.name}</h3>
-                          <p className="text-billing-primary font-bold">{formatCurrency(product.price)}</p>
-                          {productStock === 0 && (
-                            <span className="text-xs text-red-500 mt-1">Out of stock</span>
+                  {filteredProducts.map(product => (
+                    <Card 
+                      key={product.id}
+                      onClick={() => {
+                        addToCart(product);
+                        if (isMobile) toast.success(`${product.name} added to cart`);
+                      }}
+                      className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105"
+                    >
+                      <CardContent className="p-3 md:p-4 flex flex-col items-center">
+                        <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                          {product.imageUrl ? (
+                            <img 
+                              src={product.imageUrl} 
+                              alt={product.name} 
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                          ) : (
+                            <Package className="h-6 w-6 md:h-8 md:w-8 text-billing-secondary" />
                           )}
-                          {productStock > 0 && productStock <= 5 && (
-                            <span className="text-xs text-amber-500 mt-1">Low stock: {productStock}</span>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                        </div>
+                        <h3 className="font-medium text-center truncate w-full text-sm md:text-base">{product.name}</h3>
+                        <p className="text-billing-primary font-bold">{formatCurrency(product.price)}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-8 text-billing-secondary">
@@ -276,6 +278,7 @@ const PointOfSale = () => {
         open={showCustomerModal}
         onOpenChange={setShowCustomerModal}
         onSubmit={handleCustomerInfoSubmit}
+        billDetails={generateBillDetails()}
       />
     </Layout>
   );

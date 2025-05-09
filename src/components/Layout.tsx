@@ -1,9 +1,9 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useBilling } from "@/contexts/BillingContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTheme } from "@/contexts/ThemeContext";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
   Package,
@@ -22,16 +22,54 @@ import {
   Briefcase,
   Sun,
   Moon,
-  Palette
+  Palette,
+  Zap,
+  BarChart2,
+  CreditCard,
+  Users,
+  ShieldCheck,
+  Smartphone
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import AppearanceSettings from "./AppearanceSettings";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
+
+const featureCards = [
+  {
+    icon: <Zap className="w-8 h-8 text-yellow-500" />,
+    title: "3-Tap Billing",
+    description: "Create invoices in just three taps with our optimized workflow"
+  },
+  {
+    icon: <BarChart2 className="w-8 h-8 text-blue-500" />,
+    title: "Real-time Analytics",
+    description: "Get insights into your sales and business performance instantly"
+  },
+  {
+    icon: <CreditCard className="w-8 h-8 text-green-500" />,
+    title: "Multiple Payment Options",
+    description: "Accept cash, cards, UPI and more with integrated payment tracking"
+  },
+  {
+    icon: <Users className="w-8 h-8 text-purple-500" />,
+    title: "Customer Management",
+    description: "Track customer purchases and offer loyalty rewards"
+  },
+  {
+    icon: <ShieldCheck className="w-8 h-8 text-red-500" />,
+    title: "Secure Cloud Backup",
+    description: "Your data is automatically backed up and protected"
+  },
+  {
+    icon: <Smartphone className="w-8 h-8 text-indigo-500" />,
+    title: "Mobile Friendly",
+    description: "Works perfectly on all devices from desktop to mobile"
+  }
+];
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { isConfigured, businessConfig } = useBilling();
@@ -39,28 +77,166 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isMobile = useIsMobile();
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentFeature, setCurrentFeature] = useState(0);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentFeature((prev) => (prev + 1) % featureCards.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+  
   if (!isConfigured && location.pathname !== "/setup") {
     return (
-      <div className="flex h-screen items-center justify-center bg-billing-background dark:bg-gray-900">
-        <div className="text-center px-4">
-          <h1 className="text-2xl font-bold text-billing-dark dark:text-white mb-4">
-            Welcome to QuickBill
-          </h1>
-          <p className="text-billing-secondary dark:text-gray-300 mb-6">
-            Please complete the business setup to continue
-          </p>
-          <NavLink
-            to="/setup"
-            className="bg-billing-primary text-white px-6 py-3 rounded-md hover:bg-blue-600 transition-colors"
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 overflow-auto py-8">
+        <div className="w-full max-w-6xl px-4 py-4">
+          {/* Hero Section */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-8 md:mb-12"
           >
-            Setup Business
-          </NavLink>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-3 md:mb-4">
+              Welcome to <span className="text-blue-600 dark:text-blue-400">QuickBill</span>
+            </h1>
+            <h2 className="mb-5 mt-5 font-bold text-xl">by PTS</h2>
+            <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto px-2">
+              The fastest way to manage your business billing with powerful analytics
+            </p>
+          </motion.div>
+  
+          {/* Feature Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-12 px-2">
+            <motion.div 
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-lg shadow-md border border-gray-100 dark:border-gray-700"
+            >
+              <div className="flex items-center mb-3">
+                <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-full mr-3">
+                  <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Lightning Fast</h3>
+              </div>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+                Generate bills in seconds with our optimized 3-tap workflow
+              </p>
+            </motion.div>
+  
+            <motion.div 
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+              className="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-lg shadow-md border border-gray-100 dark:border-gray-700"
+            >
+              <div className="flex items-center mb-3">
+                <div className="bg-purple-100 dark:bg-purple-900/50 p-2 rounded-full mr-3">
+                  <BarChart2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Smart Analytics</h3>
+              </div>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+                Real-time insights into your sales and business performance
+              </p>
+            </motion.div>
+  
+            <motion.div 
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-lg shadow-md border border-gray-100 dark:border-gray-700"
+            >
+              <div className="flex items-center mb-3">
+                <div className="bg-green-100 dark:bg-green-900/50 p-2 rounded-full mr-3">
+                  <Settings className="w-5 h-5 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Customizable</h3>
+              </div>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+                Tailor the system to your business needs with flexible options
+              </p>
+            </motion.div>
+          </div>
+  
+          {/* Feature Showcase */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 rounded-xl md:rounded-2xl p-6 mb-8 md:mb-10 shadow-lg overflow-hidden relative mx-2"
+          >
+            <div className="relative z-10">
+              <div className="flex flex-col lg:flex-row items-center">
+                <div className="w-full lg:w-1/2 mb-6 lg:mb-0 lg:pr-6">
+                  <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
+                    Designed for Your Business
+                  </h2>
+                  <p className="text-blue-100 mb-4 text-sm md:text-base">
+                    QuickBill adapts to cafes, retail shops, and service businesses with specialized features.
+                  </p>
+                  <div className="flex space-x-2">
+                    {featureCards.map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentFeature(index)}
+                        className={`w-2 h-2 rounded-full transition-colors ${currentFeature === index ? 'bg-white' : 'bg-white/50'}`}
+                        aria-label={`View feature ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="w-full lg:w-1/2 bg-white/10 backdrop-blur-sm rounded-lg p-4 min-h-[180px] sm:min-h-[200px] flex items-center justify-center">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentFeature}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.3 }}
+                      className="flex flex-col items-center text-center w-full"
+                    >
+                      <div className="bg-white/20 p-3 rounded-full mb-3">
+                        {featureCards[currentFeature].icon}
+                      </div>
+                      <h3 className="text-lg md:text-xl font-semibold text-white mb-1">
+                        {featureCards[currentFeature].title}
+                      </h3>
+                      <p className="text-blue-100 text-sm md:text-base px-2">
+                        {featureCards[currentFeature].description}
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+  
+          {/* CTA Section */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            className="text-center px-2"
+          >
+            <NavLink
+              to="/setup"
+              className="inline-flex items-center justify-center px-6 py-3 sm:px-8 sm:py-3 text-base sm:text-lg font-medium text-white bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 rounded-full shadow-lg transition-all transform hover:scale-[1.02]"
+            >
+              Start Your Free Setup Now
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </NavLink>
+            <p className="mt-3 text-sm sm:text-base text-gray-500 dark:text-gray-400">
+              No credit card required. Get started in minutes.
+            </p>
+          </motion.div>
         </div>
       </div>
     );
   }
-
   const getBusinessIcon = (type: string) => {
     switch(type) {
       case "cafe":

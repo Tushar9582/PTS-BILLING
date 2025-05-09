@@ -130,7 +130,7 @@ const SalesHistory = () => {
                               <div className="border-t pt-4 space-y-2">
                                 <div className="flex justify-between text-sm">
                                   <span>Subtotal</span>
-                                  <span>{formatCurrency(sale.total)}</span>
+                                  <span>{formatCurrency(sale.subtotal)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                   <span>Tax</span>
@@ -210,7 +210,7 @@ const SalesHistory = () => {
                             <div className="border-t pt-4 space-y-2">
                               <div className="flex justify-between text-sm">
                                 <span>Subtotal</span>
-                                <span>{formatCurrency(sale.total)}</span>
+                                <span>{formatCurrency(sale.subtotal)}</span>
                               </div>
                               <div className="flex justify-between text-sm">
                                 <span>Tax</span>

@@ -50,6 +50,7 @@ const PointOfSale = () => {
     setCustomerInfo(info);
     setShowCustomerModal(false);
     
+    // Fix the arguments passed to completeSale
     completeSale(paymentMethod, info);
     toast.success("Payment successful! Receipt generated.");
     if (isMobile) setShowCart(false);

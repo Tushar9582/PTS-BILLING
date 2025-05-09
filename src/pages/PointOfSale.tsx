@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
 import { Plus, Minus, X, Search, Package, ShoppingCart } from "lucide-react";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 
 const PointOfSale = () => {
   const { products, categories, cart, addToCart, updateCartItem, removeFromCart, clearCart, completeSale, businessConfig } = useBilling();
@@ -107,44 +107,48 @@ const PointOfSale = () => {
             <TabsContent value={activeCategory} className="mt-6">
               {filteredProducts.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-                  {filteredProducts.map(product => (
-                    <Card 
-                      key={product.id}
-                      onClick={() => {
-                        if (product.stock === 0) {
-                          toast.error(`${product.name} is out of stock`);
-                          return;
-                        }
-                        addToCart(product);
-                        if (isMobile) toast.success(`${product.name} added to cart`);
-                      }}
-                      className={`cursor-pointer hover:shadow-md transition-all duration-200 ${
-                        product.stock === 0 ? 'opacity-60' : 'hover:scale-105'
-                      }`}
-                    >
-                      <CardContent className="p-3 md:p-4 flex flex-col items-center">
-                        <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                          {product.imageUrl ? (
-                            <img 
-                              src={product.imageUrl} 
-                              alt={product.name} 
-                              className="w-full h-full object-cover rounded-full"
-                            />
-                          ) : (
-                            <Package className="h-6 w-6 md:h-8 md:w-8 text-billing-secondary" />
+                  {filteredProducts.map(product => {
+                    // TypeScript can't infer the stock property, so we'll use a type assertion
+                    const productStock = (product as any).stock || 0;
+                    return (
+                      <Card 
+                        key={product.id}
+                        onClick={() => {
+                          if (productStock === 0) {
+                            toast.error(`${product.name} is out of stock`);
+                            return;
+                          }
+                          addToCart(product);
+                          if (isMobile) toast.success(`${product.name} added to cart`);
+                        }}
+                        className={`cursor-pointer hover:shadow-md transition-all duration-200 ${
+                          productStock === 0 ? 'opacity-60' : 'hover:scale-105'
+                        }`}
+                      >
+                        <CardContent className="p-3 md:p-4 flex flex-col items-center">
+                          <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                            {product.imageUrl ? (
+                              <img 
+                                src={product.imageUrl} 
+                                alt={product.name} 
+                                className="w-full h-full object-cover rounded-full"
+                              />
+                            ) : (
+                              <Package className="h-6 w-6 md:h-8 md:w-8 text-billing-secondary" />
+                            )}
+                          </div>
+                          <h3 className="font-medium text-center truncate w-full text-sm md:text-base">{product.name}</h3>
+                          <p className="text-billing-primary font-bold">{formatCurrency(product.price)}</p>
+                          {productStock === 0 && (
+                            <span className="text-xs text-red-500 mt-1">Out of stock</span>
                           )}
-                        </div>
-                        <h3 className="font-medium text-center truncate w-full text-sm md:text-base">{product.name}</h3>
-                        <p className="text-billing-primary font-bold">{formatCurrency(product.price)}</p>
-                        {product.stock === 0 && (
-                          <span className="text-xs text-red-500 mt-1">Out of stock</span>
-                        )}
-                        {product.stock > 0 && product.stock <= 5 && (
-                          <span className="text-xs text-amber-500 mt-1">Low stock: {product.stock}</span>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                          {productStock > 0 && productStock <= 5 && (
+                            <span className="text-xs text-amber-500 mt-1">Low stock: {productStock}</span>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8 text-billing-secondary">

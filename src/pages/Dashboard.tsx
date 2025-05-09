@@ -1,7 +1,18 @@
 import React from "react";
 import { useBilling } from "@/contexts/BillingContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, ShoppingCart, FileText, Calendar, TrendingUp, TrendingDown, Coffee, Store, ShoppingBag, Utensils } from "lucide-react";
+import { 
+  Package, 
+  ShoppingCart, 
+  FileText, 
+  Calendar, 
+  TrendingUp, 
+  TrendingDown, 
+  Coffee, 
+  Store, 
+  ShoppingBag, 
+  Utensils 
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import Layout from "@/components/Layout";
@@ -335,7 +346,7 @@ const Dashboard = () => {
                           {sale.items.reduce((sum, item) => sum + item.quantity, 0)} items
                         </td>
                         <td className="p-3 text-xs md:text-sm">
-                          {sale.customer?.name || "Walk-in"}
+                          {sale.customerInfo?.name || "Walk-in"}
                         </td>
                         <td className="p-3 text-xs md:text-sm font-medium">{formatCurrency(sale.grandTotal)}</td>
                       </tr>

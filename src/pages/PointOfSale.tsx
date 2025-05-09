@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, Minus, X, Search } from "lucide-react";
+import { Plus, Minus, X, Search, Package } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 const PointOfSale = () => {

@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useBilling } from "@/contexts/BillingContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import Layout from "@/components/Layout";
+import CustomerInfoModal from "@/components/CustomerInfoModal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,8 @@ const PointOfSale = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [showCart, setShowCart] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerInfo, setCustomerInfo] = useState({ name: "", phone: "" });
   const isMobile = useIsMobile();
   
   // Filter products by category and search query
@@ -40,7 +43,14 @@ const PointOfSale = () => {
       return;
     }
     
-    completeSale(paymentMethod);
+    setShowCustomerModal(true);
+  };
+
+  const handleCustomerInfoSubmit = (info: { name: string; phone: string }) => {
+    setCustomerInfo(info);
+    setShowCustomerModal(false);
+    
+    completeSale(paymentMethod, info);
     toast.success("Payment successful! Receipt generated.");
     if (isMobile) setShowCart(false);
   };
@@ -59,7 +69,7 @@ const PointOfSale = () => {
         {isMobile && (
           <Button 
             onClick={toggleCart} 
-            className="bg-billing-primary text-white flex items-center gap-2 mb-4"
+            className="bg-billing-primary text-white flex items-center gap-2 mb-4 animate-fade-in"
           >
             <ShoppingCart size={18} />
             View Cart {cart.length > 0 && `(${cart.length})`}
@@ -101,10 +111,16 @@ const PointOfSale = () => {
                     <Card 
                       key={product.id}
                       onClick={() => {
+                        if (product.stock === 0) {
+                          toast.error(`${product.name} is out of stock`);
+                          return;
+                        }
                         addToCart(product);
                         if (isMobile) toast.success(`${product.name} added to cart`);
                       }}
-                      className="cursor-pointer hover:shadow-md transition-shadow"
+                      className={`cursor-pointer hover:shadow-md transition-all duration-200 ${
+                        product.stock === 0 ? 'opacity-60' : 'hover:scale-105'
+                      }`}
                     >
                       <CardContent className="p-3 md:p-4 flex flex-col items-center">
                         <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
@@ -120,6 +136,12 @@ const PointOfSale = () => {
                         </div>
                         <h3 className="font-medium text-center truncate w-full text-sm md:text-base">{product.name}</h3>
                         <p className="text-billing-primary font-bold">{formatCurrency(product.price)}</p>
+                        {product.stock === 0 && (
+                          <span className="text-xs text-red-500 mt-1">Out of stock</span>
+                        )}
+                        {product.stock > 0 && product.stock <= 5 && (
+                          <span className="text-xs text-amber-500 mt-1">Low stock: {product.stock}</span>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -154,7 +176,7 @@ const PointOfSale = () => {
               {cart.length > 0 ? (
                 <div className="space-y-4">
                   {cart.map(item => (
-                    <div key={item.id} className="flex justify-between items-center border-b pb-3">
+                    <div key={item.id} className="flex justify-between items-center border-b pb-3 animate-fade-in">
                       <div className="flex-1">
                         <h3 className="font-medium text-sm md:text-base">{item.name}</h3>
                         <p className="text-billing-secondary text-xs md:text-sm">
@@ -236,7 +258,7 @@ const PointOfSale = () => {
               <Button 
                 onClick={handleCheckout} 
                 disabled={cart.length === 0}
-                className="bg-billing-success hover:bg-green-600"
+                className="bg-billing-success hover:bg-green-600 transition-colors"
               >
                 Complete Sale
               </Button>
@@ -244,6 +266,12 @@ const PointOfSale = () => {
           </div>
         </div>
       </div>
+      
+      <CustomerInfoModal
+        open={showCustomerModal}
+        onOpenChange={setShowCustomerModal}
+        onSubmit={handleCustomerInfoSubmit}
+      />
     </Layout>
   );
 };

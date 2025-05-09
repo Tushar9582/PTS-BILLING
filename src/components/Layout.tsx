@@ -14,6 +14,11 @@ import {
   Plus,
   Menu,
   X,
+  Coffee,
+  Store,
+  ShoppingBag,
+  Utensils,
+  Briefcase,
 } from "lucide-react";
 
 interface LayoutProps {
@@ -21,7 +26,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { isConfigured } = useBilling();
+  const { isConfigured, businessConfig } = useBilling();
   const location = useLocation();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -46,6 +51,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
     );
   }
+
+  const getBusinessIcon = (type: string) => {
+    switch(type) {
+      case "cafe":
+        return <Coffee size={24} className="text-amber-500" />;
+      case "grocery":
+        return <Store size={24} className="text-green-500" />;
+      case "retail":
+        return <ShoppingBag size={24} className="text-indigo-500" />;
+      case "restaurant":
+        return <Utensils size={24} className="text-red-500" />;
+      default:
+        return <Briefcase size={24} className="text-blue-500" />;
+    }
+  };
 
   const navItems = [
     {
@@ -131,8 +151,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         )}
         
-        <div className={`mt-${isMobile ? "16" : "6"} h-full overflow-y-auto`}>
-          <ul className="space-y-1 px-3">
+        {businessConfig?.name && (
+          <div className="p-4 border-b border-gray-200 flex items-center gap-3">
+            {getBusinessIcon(businessConfig.type)}
+            <div>
+              <h2 className="text-base font-medium">{businessConfig.name}</h2>
+              <p className="text-xs text-billing-secondary capitalize">{businessConfig.type || "Business"}</p>
+            </div>
+          </div>
+        )}
+        
+        <div className={`${isMobile ? "mt-16" : ""} h-full overflow-y-auto`}>
+          <ul className="space-y-1 px-3 py-4">
             {filteredNavItems.map((item) => (
               <li key={item.path}>
                 <NavLink

@@ -1,3 +1,4 @@
+
 import React from "react";
 import { useBilling } from "@/contexts/BillingContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,10 +19,13 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import Layout from "@/components/Layout";
 import StockAlerts from "@/components/StockAlerts";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTheme } from "@/contexts/ThemeContext";
+import { Button } from "@/components/ui/button";
 
 const Dashboard = () => {
   const { products, sales, categories, businessConfig } = useBilling();
   const isMobile = useIsMobile();
+  const { buttonStyle } = useTheme();
 
   // Calculate dashboard statistics
   const totalSales = sales.length;
@@ -148,9 +152,9 @@ const Dashboard = () => {
   return (
     <Layout>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-billing-dark">Dashboard</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-billing-dark dark:text-white">Dashboard</h1>
         {businessConfig?.name && (
-          <div className="text-base md:text-lg text-billing-secondary animate-fade-in">
+          <div className="text-base md:text-lg text-billing-secondary dark:text-gray-300 animate-fade-in">
             Welcome back to {businessConfig.name}!
           </div>
         )}
@@ -161,15 +165,15 @@ const Dashboard = () => {
       
       {/* Stats cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
-        <Card className="bg-white relative overflow-hidden animate-fade-in">
+        <Card className="bg-white dark:bg-gray-800 dark:text-white relative overflow-hidden animate-fade-in">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium text-billing-secondary">
+            <CardTitle className="text-xs md:text-sm font-medium text-billing-secondary dark:text-gray-300">
               Today's Revenue
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-xl md:text-2xl font-bold">{formatCurrency(todayRevenue)}</div>
+              <div className="text-xl md:text-2xl font-bold dark:text-white">{formatCurrency(todayRevenue)}</div>
               <div className="flex items-center gap-1 text-xs">
                 {revenueTrend > 0 ? (
                   <TrendingUp className="h-4 w-4 text-green-500" />
@@ -187,45 +191,45 @@ const Dashboard = () => {
           </CardContent>
         </Card>
         
-        <Card className="bg-white relative overflow-hidden animate-fade-in" style={{animationDelay: "0.1s"}}>
+        <Card className="bg-white dark:bg-gray-800 dark:text-white relative overflow-hidden animate-fade-in" style={{animationDelay: "0.1s"}}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium text-billing-secondary">
+            <CardTitle className="text-xs md:text-sm font-medium text-billing-secondary dark:text-gray-300">
               Total Revenue
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-xl md:text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
+              <div className="text-xl md:text-2xl font-bold dark:text-white">{formatCurrency(totalRevenue)}</div>
               <ShoppingCart className="h-5 w-5 text-billing-primary" />
             </div>
             {getBusinessAnimation()}
           </CardContent>
         </Card>
         
-        <Card className="bg-white relative overflow-hidden animate-fade-in" style={{animationDelay: "0.2s"}}>
+        <Card className="bg-white dark:bg-gray-800 dark:text-white relative overflow-hidden animate-fade-in" style={{animationDelay: "0.2s"}}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium text-billing-secondary">
+            <CardTitle className="text-xs md:text-sm font-medium text-billing-secondary dark:text-gray-300">
               Total Sales
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-xl md:text-2xl font-bold">{totalSales}</div>
+              <div className="text-xl md:text-2xl font-bold dark:text-white">{totalSales}</div>
               <FileText className="h-5 w-5 text-billing-success" />
             </div>
             {getBusinessAnimation()}
           </CardContent>
         </Card>
         
-        <Card className="bg-white relative overflow-hidden animate-fade-in" style={{animationDelay: "0.3s"}}>
+        <Card className="bg-white dark:bg-gray-800 dark:text-white relative overflow-hidden animate-fade-in" style={{animationDelay: "0.3s"}}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium text-billing-secondary">
+            <CardTitle className="text-xs md:text-sm font-medium text-billing-secondary dark:text-gray-300">
               Total Products
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-xl md:text-2xl font-bold">{totalProducts}</div>
+              <div className="text-xl md:text-2xl font-bold dark:text-white">{totalProducts}</div>
               <Package className="h-5 w-5 text-billing-secondary" />
             </div>
             {getBusinessAnimation()}
@@ -235,18 +239,18 @@ const Dashboard = () => {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Sales Chart */}
-        <Card className={`col-span-1 ${!isMobile ? 'lg:col-span-2' : ''} bg-white animate-fade-in`} style={{animationDelay: "0.4s"}}>
+        <Card className={`col-span-1 ${!isMobile ? 'lg:col-span-2' : ''} bg-white dark:bg-gray-800 dark:text-white animate-fade-in`} style={{animationDelay: "0.4s"}}>
           <CardHeader>
             <CardTitle>Revenue (Last 7 Days)</CardTitle>
           </CardHeader>
           <CardContent className="h-60 md:h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesByDay}>
-                <XAxis dataKey="date" />
-                <YAxis />
+                <XAxis dataKey="date" stroke="currentColor" />
+                <YAxis stroke="currentColor" />
                 <Tooltip 
                   formatter={(value) => [`${formatCurrency(value as number)}`, "Revenue"]}
-                  contentStyle={{ backgroundColor: "#fff", borderRadius: "4px", border: "1px solid #e2e8f0" }}
+                  contentStyle={{ backgroundColor: "var(--background)", borderRadius: "4px", border: "1px solid var(--border)", color: "var(--foreground)" }}
                   cursor={{ fill: "rgba(59, 130, 246, 0.1)" }}
                 />
                 <Bar dataKey="revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
@@ -255,46 +259,58 @@ const Dashboard = () => {
           </CardContent>
         </Card>
         
-        {/* Category Distribution */}
-        <Card className="bg-white animate-fade-in" style={{animationDelay: "0.5s"}}>
+        {/* Revenue Breakdown */}
+        <Card className="bg-white dark:bg-gray-800 dark:text-white animate-fade-in" style={{animationDelay: "0.5s"}}>
           <CardHeader>
-            <CardTitle>Category Distribution</CardTitle>
+            <CardTitle>Revenue Breakdown</CardTitle>
           </CardHeader>
-          <CardContent className={`${isMobile ? 'h-60' : 'h-80'} flex flex-col items-center justify-center`}>
-            {categoryData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    paddingAngle={5}
-                    dataKey="value"
-                    label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value) => [`${value} items`, "Quantity"]}
-                    contentStyle={{ backgroundColor: "#fff", borderRadius: "4px", border: "1px solid #e2e8f0" }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="text-billing-secondary text-center">No sales data available</div>
-            )}
+          <CardContent className={`${isMobile ? 'h-60' : 'h-80'} space-y-4`}>
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium mb-2 dark:text-gray-300">Payment Methods</h3>
+                <div className="space-y-2">
+                  {['cash', 'card', 'upi'].map(method => {
+                    const methodSales = sales.filter(sale => sale.paymentMethod === method);
+                    const methodRevenue = methodSales.reduce((sum, sale) => sum + sale.grandTotal, 0);
+                    const percentage = totalRevenue > 0 ? (methodRevenue / totalRevenue) * 100 : 0;
+                    return (
+                      <div key={method} className="flex items-center">
+                        <div className="w-24 text-sm capitalize">{method}</div>
+                        <div className="flex-1 mx-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-billing-primary rounded-full" 
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <div className="w-20 text-right text-sm">{percentage.toFixed(1)}%</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="text-sm font-medium mb-2 dark:text-gray-300">Daily Average</h3>
+                <div className="text-3xl font-bold dark:text-white">
+                  {formatCurrency(totalSales > 0 ? totalRevenue / totalSales : 0)}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Average sale amount</p>
+              </div>
+              
+              <div>
+                <h3 className="text-sm font-medium mb-2 dark:text-gray-300">Tax Collected</h3>
+                <div className="text-2xl font-bold dark:text-white">
+                  {formatCurrency(sales.reduce((sum, sale) => sum + sale.tax, 0))}
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         {/* Best Selling Products */}
-        <Card className="bg-white animate-fade-in" style={{animationDelay: "0.6s"}}>
+        <Card className="bg-white dark:bg-gray-800 dark:text-white animate-fade-in" style={{animationDelay: "0.6s"}}>
           <CardHeader>
             <CardTitle>Best Selling Products</CardTitle>
           </CardHeader>
@@ -302,25 +318,25 @@ const Dashboard = () => {
             <div className="space-y-4">
               {bestSellingProducts.length > 0 ? (
                 bestSellingProducts.map((product, index) => (
-                  <div key={product.id} className="flex items-center justify-between border-b pb-2 last:border-0 animate-fade-in" style={{animationDelay: `${0.7 + index * 0.1}s`}}>
+                  <div key={product.id} className="flex items-center justify-between border-b dark:border-gray-700 pb-2 last:border-0 animate-fade-in" style={{animationDelay: `${0.7 + index * 0.1}s`}}>
                     <div className="flex items-center gap-3">
                       <div className="bg-billing-primary text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">
                         {index + 1}
                       </div>
-                      <span className="font-medium truncate max-w-[150px]">{product.name}</span>
+                      <span className="font-medium truncate max-w-[150px] dark:text-white">{product.name}</span>
                     </div>
-                    <span className="text-billing-secondary">{product.count} sold</span>
+                    <span className="text-billing-secondary dark:text-gray-300">{product.count} sold</span>
                   </div>
                 ))
               ) : (
-                <p className="text-billing-secondary">No sales data yet</p>
+                <p className="text-billing-secondary dark:text-gray-300">No sales data yet</p>
               )}
             </div>
           </CardContent>
         </Card>
         
         {/* Recent Sales */}
-        <Card className="bg-white animate-fade-in" style={{animationDelay: "0.7s"}}>
+        <Card className="bg-white dark:bg-gray-800 dark:text-white animate-fade-in" style={{animationDelay: "0.7s"}}>
           <CardHeader>
             <CardTitle>Recent Sales</CardTitle>
           </CardHeader>
@@ -328,7 +344,7 @@ const Dashboard = () => {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="text-left border-b border-gray-200">
+                  <tr className="text-left border-b border-gray-200 dark:border-gray-700">
                     <th className="p-3 text-xs md:text-sm">Date</th>
                     <th className="p-3 text-xs md:text-sm">Items</th>
                     <th className="p-3 text-xs md:text-sm">Customer</th>
@@ -338,7 +354,7 @@ const Dashboard = () => {
                 <tbody>
                   {recentSales.length > 0 ? (
                     recentSales.map((sale, index) => (
-                      <tr key={sale.id} className="border-b border-gray-100 hover:bg-gray-50 animate-fade-in" style={{animationDelay: `${0.8 + index * 0.1}s`}}>
+                      <tr key={sale.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 animate-fade-in" style={{animationDelay: `${0.8 + index * 0.1}s`}}>
                         <td className="p-3 text-xs md:text-sm">
                           {new Date(sale.date).toLocaleDateString()}
                         </td>
@@ -348,12 +364,12 @@ const Dashboard = () => {
                         <td className="p-3 text-xs md:text-sm">
                           {sale.customerInfo?.name || "Walk-in"}
                         </td>
-                        <td className="p-3 text-xs md:text-sm font-medium">{formatCurrency(sale.grandTotal)}</td>
+                        <td className="p-3 text-xs md:text-sm font-medium dark:text-white">{formatCurrency(sale.grandTotal)}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="p-3 text-center text-billing-secondary">
+                      <td colSpan={4} className="p-3 text-center text-billing-secondary dark:text-gray-300">
                         No sales records yet
                       </td>
                     </tr>
@@ -363,6 +379,13 @@ const Dashboard = () => {
             </div>
           </CardContent>
         </Card>
+      </div>
+      
+      {/* Action buttons */}
+      <div className="mt-6 flex gap-4 flex-wrap">
+        <Button variant={buttonStyle}>Default Button</Button>
+        <Button variant="neon" className="neon-button">Neon Style</Button>
+        <Button variant="neumorphic" className="neumorphic-button">Neumorphic Style</Button>
       </div>
     </Layout>
   );

@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast";
+import { useCustomerStore } from "@/store/customerStore";
 
 interface CustomerInfoModalProps {
   open: boolean;
@@ -22,20 +24,51 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
   onOpenChange,
   onSubmit,
 }) => {
+  const { toast } = useToast();
+  const { recentCustomers, addCustomer } = useCustomerStore();
   const [customerInfo, setCustomerInfo] = React.useState({
     name: "",
     phone: "",
   });
+  const [showRecent, setShowRecent] = React.useState(false);
+
+  useEffect(() => {
+    // Reset state when modal opens
+    if (open) {
+      setShowRecent(recentCustomers.length > 0);
+    }
+  }, [open, recentCustomers.length]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(customerInfo);
+    if (!customerInfo.name && !customerInfo.phone) {
+      toast({
+        title: "Anonymous Customer",
+        description: "Continuing with walk-in customer",
+      });
+      onSubmit({ name: "Walk-in Customer", phone: "" });
+    } else {
+      addCustomer(customerInfo);
+      onSubmit(customerInfo);
+      toast({
+        title: "Customer Added",
+        description: `Bill created for ${customerInfo.name}`,
+      });
+    }
     setCustomerInfo({ name: "", phone: "" });
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setCustomerInfo((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const selectRecentCustomer = (customer: { name: string; phone: string }) => {
+    setCustomerInfo(customer);
+    toast({
+      title: "Customer Selected",
+      description: `${customer.name} selected from recent customers`,
+    });
   };
 
   return (
@@ -45,6 +78,24 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
           <DialogTitle>Customer Information</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
+          {showRecent && (
+            <div className="mb-4">
+              <Label className="mb-2 block">Recent Customers</Label>
+              <div className="max-h-[120px] overflow-y-auto space-y-2">
+                {recentCustomers.slice(0, 5).map((customer, index) => (
+                  <div 
+                    key={index} 
+                    onClick={() => selectRecentCustomer(customer)}
+                    className="p-2 border rounded-md cursor-pointer hover:bg-accent dark:hover:bg-accent/20 flex justify-between"
+                  >
+                    <span>{customer.name}</span>
+                    <span className="text-sm text-muted-foreground">{customer.phone}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="name">Customer Name</Label>
@@ -54,7 +105,6 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
                 value={customerInfo.name}
                 onChange={handleChange}
                 placeholder="Enter customer name"
-                required
                 className="w-full"
                 autoComplete="name"
               />
@@ -67,7 +117,6 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
                 value={customerInfo.phone}
                 onChange={handleChange}
                 placeholder="Enter phone number"
-                required
                 className="w-full"
                 type="tel"
                 autoComplete="tel"
@@ -78,7 +127,14 @@ const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button type="submit" className="w-full sm:w-auto">Continue</Button>
+            <Button type="submit" variant="neon" className="w-full sm:w-auto">Continue</Button>
+            <Button type="submit" onClick={(e) => {
+              e.preventDefault();
+              onSubmit({ name: "Walk-in Customer", phone: "" });
+              onOpenChange(false);
+            }} variant="ghost" className="w-full sm:w-auto text-sm">
+              Skip (Walk-in)
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useBilling } from "@/contexts/BillingContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   Home,
   Package,
@@ -19,7 +20,14 @@ import {
   ShoppingBag,
   Utensils,
   Briefcase,
+  Sun,
+  Moon,
+  Palette
 } from "lucide-react";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import AppearanceSettings from "./AppearanceSettings";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -29,16 +37,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { isConfigured, businessConfig } = useBilling();
   const location = useLocation();
   const isMobile = useIsMobile();
+  const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!isConfigured && location.pathname !== "/setup") {
     return (
-      <div className="flex h-screen items-center justify-center bg-billing-background">
+      <div className="flex h-screen items-center justify-center bg-billing-background dark:bg-gray-900">
         <div className="text-center px-4">
-          <h1 className="text-2xl font-bold text-billing-dark mb-4">
+          <h1 className="text-2xl font-bold text-billing-dark dark:text-white mb-4">
             Welcome to QuickBill
           </h1>
-          <p className="text-billing-secondary mb-6">
+          <p className="text-billing-secondary dark:text-gray-300 mb-6">
             Please complete the business setup to continue
           </p>
           <NavLink
@@ -114,87 +123,126 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const filteredNavItems = navItems.filter((item) => item.showWhen);
 
+  const SidebarContent = () => (
+    <>
+      {businessConfig?.name && (
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+          {getBusinessIcon(businessConfig.type)}
+          <div>
+            <h2 className="text-base font-medium dark:text-white">{businessConfig.name}</h2>
+            <p className="text-xs text-billing-secondary dark:text-gray-400 capitalize">{businessConfig.type || "Business"}</p>
+          </div>
+        </div>
+      )}
+      
+      <div className={`${isMobile ? "mt-4" : ""} h-full overflow-y-auto`}>
+        <ul className="space-y-1 px-3 py-4">
+          {filteredNavItems.map((item) => (
+            <li key={item.path}>
+              <NavLink
+                to={item.path}
+                onClick={() => isMobile && setSidebarOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-3 rounded-md transition-colors ${
+                    isActive
+                      ? "bg-billing-primary text-white dark:bg-blue-600"
+                      : "text-billing-dark dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  }`
+                }
+              >
+                {item.icon}
+                <span>{item.name}</span>
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+        
+        <div className="px-3 py-4 border-t border-gray-200 dark:border-gray-700">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="flex items-center gap-2 w-full justify-start dark:border-gray-700 dark:text-gray-200"
+              >
+                <Palette size={20} />
+                <span>Appearance</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="start">
+              <div className="grid gap-4">
+                <div className="flex items-center gap-4">
+                  <Button 
+                    variant={theme === "light" ? "default" : "outline"}
+                    size="sm"
+                    className="flex items-center gap-2"
+                    onClick={() => setTheme("light")}
+                  >
+                    <Sun className="h-4 w-4" />
+                    Light
+                  </Button>
+                  <Button
+                    variant={theme === "dark" ? "default" : "outline"}
+                    size="sm"
+                    className="flex items-center gap-2"
+                    onClick={() => setTheme("dark")}
+                  >
+                    <Moon className="h-4 w-4" />
+                    Dark
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+    </>
+  );
+
   return (
-    <div className="flex h-screen bg-billing-background overflow-hidden">
+    <div className="flex h-screen bg-billing-background dark:bg-gray-900 overflow-hidden">
       {/* Mobile Header */}
       {isMobile && (
-        <div className="fixed top-0 left-0 right-0 h-16 bg-white z-50 flex items-center justify-between px-4 border-b border-gray-200">
+        <div className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-800 z-50 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="mr-3 p-2 rounded-md hover:bg-gray-100"
-            >
-              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-            <h1 className="text-xl font-bold text-billing-dark">QuickBill</h1>
+            <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" className="mr-3 p-2 rounded-md dark:text-white">
+                  <Menu size={20} />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-72 p-0 bg-white dark:bg-gray-800">
+                <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                  <h1 className="text-xl font-bold text-billing-dark dark:text-white">QuickBill</h1>
+                  <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(false)}>
+                    <X size={16} />
+                  </Button>
+                </div>
+                <SidebarContent />
+              </SheetContent>
+            </Sheet>
+            <h1 className="text-xl font-bold text-billing-dark dark:text-white">QuickBill</h1>
           </div>
           
           {location.pathname === "/pos" && (
-            <div className="text-sm font-medium text-billing-secondary">
+            <div className="text-sm font-medium text-billing-secondary dark:text-gray-300">
               Point of Sale
             </div>
           )}
         </div>
       )}
       
-      {/* Sidebar */}
-      <aside 
-        className={`${
-          isMobile 
-            ? `fixed inset-0 z-40 transform ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} transition-transform duration-300 ease-in-out` 
-            : "w-64 relative"
-        } bg-white border-r border-gray-200 shadow-sm h-screen`}
-      >
-        {!isMobile && (
-          <div className="p-4 border-b border-gray-200">
-            <h1 className="text-xl font-bold text-billing-dark">QuickBill</h1>
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <aside className="w-64 relative bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm h-screen">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+            <h1 className="text-xl font-bold text-billing-dark dark:text-white">QuickBill</h1>
           </div>
-        )}
-        
-        {businessConfig?.name && (
-          <div className="p-4 border-b border-gray-200 flex items-center gap-3">
-            {getBusinessIcon(businessConfig.type)}
-            <div>
-              <h2 className="text-base font-medium">{businessConfig.name}</h2>
-              <p className="text-xs text-billing-secondary capitalize">{businessConfig.type || "Business"}</p>
-            </div>
-          </div>
-        )}
-        
-        <div className={`${isMobile ? "mt-16" : ""} h-full overflow-y-auto`}>
-          <ul className="space-y-1 px-3 py-4">
-            {filteredNavItems.map((item) => (
-              <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-3 rounded-md transition-colors ${
-                      isActive
-                        ? "bg-billing-primary text-white"
-                        : "text-billing-dark hover:bg-gray-100"
-                    }`
-                  }
-                  onClick={() => isMobile && setSidebarOpen(false)}
-                >
-                  {item.icon}
-                  <span>{item.name}</span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </aside>
-
-      {/* Mobile sidebar overlay */}
-      {isMobile && sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-30"
-          onClick={() => setSidebarOpen(false)}
-        />
+          <SidebarContent />
+        </aside>
       )}
 
       {/* Main content */}
-      <main className={`flex-1 overflow-auto ${isMobile ? "pt-16" : ""}`}>
+      <main className={`flex-1 overflow-auto ${isMobile ? "pt-16" : ""} dark:text-white`}>
         <div className="p-4 md:p-6">{children}</div>
       </main>
     </div>

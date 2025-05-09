@@ -1,6 +1,7 @@
 
 import React, { useState } from "react";
 import { useBilling } from "@/contexts/BillingContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import Layout from "@/components/Layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, Minus, X, Search, Package } from "lucide-react";
+import { Plus, Minus, X, Search, Package, ShoppingCart } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 
 const PointOfSale = () => {
@@ -17,6 +18,8 @@ const PointOfSale = () => {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [showCart, setShowCart] = useState(false);
+  const isMobile = useIsMobile();
   
   // Filter products by category and search query
   const filteredProducts = products.filter(product => {
@@ -39,15 +42,34 @@ const PointOfSale = () => {
     
     completeSale(paymentMethod);
     toast.success("Payment successful! Receipt generated.");
+    if (isMobile) setShowCart(false);
+  };
+  
+  // Mobile cart toggle
+  const toggleCart = () => {
+    setShowCart(!showCart);
   };
   
   return (
     <Layout>
-      <h1 className="text-3xl font-bold text-billing-dark mb-6">Point of Sale</h1>
+      <div className="flex flex-col lg:flex-row justify-between items-center mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold text-billing-dark mb-2 lg:mb-0">Point of Sale</h1>
+        
+        {/* Mobile cart button */}
+        {isMobile && (
+          <Button 
+            onClick={toggleCart} 
+            className="bg-billing-primary text-white flex items-center gap-2 mb-4"
+          >
+            <ShoppingCart size={18} />
+            View Cart {cart.length > 0 && `(${cart.length})`}
+          </Button>
+        )}
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Products Section */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className={`${(isMobile && showCart) ? "hidden" : ""} lg:col-span-2 space-y-6`}>
           {/* Search and filter */}
           <div className="flex flex-wrap gap-4 items-center">
             <div className="relative flex-1">
@@ -74,15 +96,18 @@ const PointOfSale = () => {
             
             <TabsContent value={activeCategory} className="mt-6">
               {filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
                   {filteredProducts.map(product => (
                     <Card 
                       key={product.id}
-                      onClick={() => addToCart(product)}
+                      onClick={() => {
+                        addToCart(product);
+                        if (isMobile) toast.success(`${product.name} added to cart`);
+                      }}
                       className="cursor-pointer hover:shadow-md transition-shadow"
                     >
-                      <CardContent className="p-4 flex flex-col items-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                      <CardContent className="p-3 md:p-4 flex flex-col items-center">
+                        <div className="w-12 h-12 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
                           {product.imageUrl ? (
                             <img 
                               src={product.imageUrl} 
@@ -90,10 +115,10 @@ const PointOfSale = () => {
                               className="w-full h-full object-cover rounded-full"
                             />
                           ) : (
-                            <Package className="h-8 w-8 text-billing-secondary" />
+                            <Package className="h-6 w-6 md:h-8 md:w-8 text-billing-secondary" />
                           )}
                         </div>
-                        <h3 className="font-medium text-center truncate w-full">{product.name}</h3>
+                        <h3 className="font-medium text-center truncate w-full text-sm md:text-base">{product.name}</h3>
                         <p className="text-billing-primary font-bold">{formatCurrency(product.price)}</p>
                       </CardContent>
                     </Card>
@@ -109,37 +134,47 @@ const PointOfSale = () => {
         </div>
         
         {/* Cart Section */}
-        <div className="space-y-6">
-          <Card>
-            <div className="bg-billing-dark text-white p-4">
-              <h2 className="text-xl font-bold">Current Sale</h2>
+        <div className={`${(isMobile && !showCart) ? "hidden" : ""} space-y-6`}>
+          <Card className="animate-fade-in">
+            <div className="bg-billing-dark text-white p-3 md:p-4 flex justify-between items-center">
+              <h2 className="text-lg md:text-xl font-bold">Current Sale</h2>
+              {isMobile && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={toggleCart} 
+                  className="text-white hover:bg-billing-dark"
+                >
+                  <X size={18} />
+                </Button>
+              )}
             </div>
             
-            <div className="p-4 max-h-[calc(100vh-350px)] overflow-y-auto">
+            <div className="p-3 md:p-4 max-h-[calc(100vh-350px)] overflow-y-auto">
               {cart.length > 0 ? (
                 <div className="space-y-4">
                   {cart.map(item => (
                     <div key={item.id} className="flex justify-between items-center border-b pb-3">
                       <div className="flex-1">
-                        <h3 className="font-medium">{item.name}</h3>
-                        <p className="text-billing-secondary text-sm">
+                        <h3 className="font-medium text-sm md:text-base">{item.name}</h3>
+                        <p className="text-billing-secondary text-xs md:text-sm">
                           {formatCurrency(item.price)} x {item.quantity}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 md:gap-3">
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-6 w-6 md:h-7 md:w-7"
                           onClick={() => updateCartItem(item.id, item.quantity - 1)}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
-                        <span>{item.quantity}</span>
+                        <span className="text-sm md:text-base w-4 text-center">{item.quantity}</span>
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-7 w-7"
+                          className="h-6 w-6 md:h-7 md:w-7"
                           onClick={() => updateCartItem(item.id, item.quantity + 1)}
                         >
                           <Plus className="h-3 w-3" />
@@ -147,10 +182,10 @@ const PointOfSale = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-billing-danger"
+                          className="h-6 w-6 md:h-7 md:w-7 text-billing-danger"
                           onClick={() => removeFromCart(item.id)}
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3 w-3 md:h-4 md:w-4" />
                         </Button>
                       </div>
                     </div>
@@ -163,7 +198,7 @@ const PointOfSale = () => {
               )}
             </div>
             
-            <div className="border-t p-4 space-y-2">
+            <div className="border-t p-3 md:p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotal)}</span>
@@ -198,7 +233,11 @@ const PointOfSale = () => {
               <Button variant="outline" onClick={() => clearCart()}>
                 Clear Cart
               </Button>
-              <Button onClick={handleCheckout} disabled={cart.length === 0}>
+              <Button 
+                onClick={handleCheckout} 
+                disabled={cart.length === 0}
+                className="bg-billing-success hover:bg-green-600"
+              >
                 Complete Sale
               </Button>
             </div>

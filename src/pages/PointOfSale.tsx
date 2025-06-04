@@ -11,6 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatCurrency } from "@/lib/utils";
 import { Plus, Minus, X, Search, Package, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
+import { database } from "@/firebase/firebaseConfig"; // ✅ Add this
+import { push, ref } from "firebase/database"; // ✅ Add this
+import { v4 as uuidv4 } from "uuid"; // for unique transaction ID
+
 
 const PointOfSale = () => {
   const { products, categories, cart, addToCart, updateCartItem, removeFromCart, clearCart, completeSale, businessConfig } = useBilling();
@@ -70,7 +74,7 @@ const PointOfSale = () => {
     setCustomerInfo(info);
     setShowCustomerModal(false);
     
-    completeSale(paymentMethod, info);
+    completeSale(paymentMethod);
     toast.success("Payment successful! Receipt generated.");
     if (isMobile) setShowCart(false);
   };

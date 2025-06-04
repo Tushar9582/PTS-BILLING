@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +15,8 @@ import Categories from "@/pages/Categories";
 import SalesHistory from "@/pages/SalesHistory";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register"; // ✅ Added
 
 const queryClient = new QueryClient();
 
@@ -26,9 +27,11 @@ const App = () => (
         <Toaster />
         <Sonner position="top-right" />
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route path="/setup" element={<BusinessSetup />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/pos" element={<PointOfSale />} />
           <Route path="/products" element={<Products />} />
           <Route path="/products/add" element={<ProductForm />} />

@@ -1,32 +1,40 @@
-
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useBilling } from "@/contexts/BillingContext";
+import { Product, useBilling } from "@/contexts/BillingContext";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+
+import { database } from "@/firebase/firebaseConfig";
+import { ref, set, push } from "firebase/database";
+import { getAuth } from "firebase/auth";
 
 const ProductForm = () => {
   const { productId } = useParams();
   const navigate = useNavigate();
   const { products, categories, addProduct, updateProduct } = useBilling();
   const isEditing = !!productId;
-  
+
   const [formState, setFormState] = useState({
     name: "",
     price: "",
     category: "",
     imageUrl: "",
   });
-  
-  // If editing, load the product data
+
   useEffect(() => {
     if (isEditing) {
-      const product = products.find(p => p.id === productId);
+      const product = products.find((p) => p.id === productId);
       if (product) {
         setFormState({
           name: product.name,
@@ -40,47 +48,74 @@ const ProductForm = () => {
       }
     }
   }, [isEditing, productId, products, navigate]);
-  
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormState(prev => ({ ...prev, [name]: value }));
+    setFormState((prev) => ({ ...prev, [name]: value }));
   };
-  
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formState.name.trim() || !formState.price || !formState.category) {
       toast.error("Please fill in all required fields");
       return;
     }
-    
+
     const price = parseFloat(formState.price);
     if (isNaN(price) || price <= 0) {
       toast.error("Please enter a valid price");
       return;
     }
-    
-    if (isEditing && productId) {
-      updateProduct(productId, {
-        name: formState.name,
-        price,
-        category: formState.category,
-        imageUrl: formState.imageUrl || undefined,
-      });
-      toast.success("Product updated successfully");
-    } else {
-      addProduct({
-        name: formState.name,
-        price,
-        category: formState.category,
-        imageUrl: formState.imageUrl || undefined,
-      });
-      toast.success("Product added successfully");
+
+    const productData = {
+      name: formState.name,
+      price,
+      category: formState.category,
+      imageUrl: formState.imageUrl || "",
+      createdAt: new Date().toISOString(),
+    };
+
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    if (!user) {
+      toast.error("User not authenticated. Please sign in again.");
+      return;
     }
-    
-    navigate("/products");
+
+    try {
+      if (isEditing && productId) {
+        // Update existing product
+        updateProduct(productId, productData);
+        await set(ref(database, `users/${user.uid}/products/${productId}`), {
+          id: productId,
+          ...productData,
+        });
+        toast.success("Product updated successfully");
+      } else {
+        // Add new product
+        const userProductsRef = ref(database, `users/${user.uid}/products`);
+        const newProductRef = push(userProductsRef);
+        const id = newProductRef.key!;
+
+        const productWithId = { 
+          id,
+          ...productData 
+        };
+
+        await set(newProductRef, productWithId);
+        addProduct(productWithId);
+        toast.success("Product added successfully");
+      }
+      
+      navigate("/products");
+    } catch (error) {
+      console.error("Database error:", error);
+      toast.error(`Failed to ${isEditing ? "update" : "save"} product. Please try again.`);
+    }
   };
-  
+
   return (
     <Layout>
       <div className="flex justify-between items-center mb-6">
@@ -88,10 +123,12 @@ const ProductForm = () => {
           {isEditing ? "Edit Product" : "Add New Product"}
         </h1>
       </div>
-      
+
       <Card>
         <CardHeader>
-          <CardTitle>{isEditing ? "Edit Product Details" : "Enter Product Details"}</CardTitle>
+          <CardTitle>
+            {isEditing ? "Edit Product Details" : "Enter Product Details"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -107,7 +144,7 @@ const ProductForm = () => {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="price">Price *</Label>
                 <Input
@@ -122,18 +159,20 @@ const ProductForm = () => {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="category">Category *</Label>
                 <Select
                   value={formState.category}
-                  onValueChange={(value) => setFormState(prev => ({ ...prev, category: value }))}
+                  onValueChange={(value) =>
+                    setFormState((prev) => ({ ...prev, category: value }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map(category => (
+                    {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
                       </SelectItem>
@@ -141,7 +180,7 @@ const ProductForm = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="imageUrl">Image URL (optional)</Label>
                 <Input
@@ -153,7 +192,7 @@ const ProductForm = () => {
                 />
               </div>
             </div>
-            
+
             <div className="flex justify-end gap-4">
               <Button type="button" variant="outline" onClick={() => navigate("/products")}>
                 Cancel

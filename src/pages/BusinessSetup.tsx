@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useBilling } from "@/contexts/BillingContext";
@@ -8,6 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+
+// ✅ Firebase imports
+import { auth, database } from "../firebase/firebaseConfig";
+import { ref, set } from "firebase/database";
 
 const BusinessSetup = () => {
   const navigate = useNavigate();
@@ -37,14 +40,15 @@ const BusinessSetup = () => {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formState.name.trim() || !formState.address.trim() || !formState.phone.trim()) {
       toast.error("Please fill in all required fields");
       return;
     }
 
+    // ✅ Save to Context
     setBusinessConfig({
       name: formState.name,
       type: formState.type,
@@ -55,8 +59,21 @@ const BusinessSetup = () => {
       logo: formState.logo,
     });
 
-    toast.success("Business setup completed!");
-    navigate("/dashboard");
+    // ✅ Save to Firebase Realtime Database
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        await set(ref(database, `users/${user.uid}/business`), {
+          ...formState,
+        });
+        toast.success("Business setup completed!");
+        navigate("/dashboard");
+      } else {
+        toast.error("User not authenticated");
+      }
+    } catch (error: any) {
+      toast.error("Failed to save business data: " + error.message);
+    }
   };
 
   return (

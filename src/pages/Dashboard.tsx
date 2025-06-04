@@ -21,11 +21,20 @@ import StockAlerts from "@/components/StockAlerts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
+import { auth } from "../firebase/firebaseConfig";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
   const { products, sales, categories, businessConfig } = useBilling();
   const isMobile = useIsMobile();
   const { buttonStyle } = useTheme();
+  const navigate = useNavigate();
+
+const handleLogout = () => {
+  auth.signOut().then(() => {
+    navigate("/login");
+  });
+};
 
   // Calculate dashboard statistics
   const totalSales = sales.length;
@@ -156,6 +165,13 @@ const Dashboard = () => {
         {businessConfig?.name && (
           <div className="text-base md:text-lg text-billing-secondary dark:text-gray-300 animate-fade-in">
             Welcome back to {businessConfig.name}!
+            <button
+                onClick={handleLogout}
+                  className="bg-red-600 text-white px-3 py-1 text-sm rounded shadow hover:bg-red-700 transition duration-200 ml-4"
+
+                >
+                Logout
+            </button>
           </div>
         )}
       </div>

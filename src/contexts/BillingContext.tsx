@@ -1,8 +1,10 @@
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { toast } from "@/components/ui/sonner";
+import { database } from "@/firebase/firebaseConfig";
+import { ref, set, remove, onValue, update, push } from "firebase/database";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 
-// Define types
+// Types
 export interface Product {
   id: string;
   name: string;
@@ -34,6 +36,7 @@ export interface Sale {
   id: string;
   items: CartItem[];
   total: number;
+  subtotal: number; // ✅ Added this
   tax: number;
   grandTotal: number;
   date: string;
@@ -47,7 +50,7 @@ interface BillingContextType {
   sales: Sale[];
   businessConfig: BusinessConfig | null;
   isConfigured: boolean;
-  addProduct: (product: Omit<Product, "id">) => void;
+  addProduct: (product: Product) => void;
   updateProduct: (id: string, product: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
   addCategory: (name: string) => void;
@@ -63,11 +66,7 @@ interface BillingContextType {
 const BillingContext = createContext<BillingContextType | undefined>(undefined);
 
 export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(() => {
-    const savedProducts = localStorage.getItem("billing_products");
-    return savedProducts ? JSON.parse(savedProducts) : [];
-  });
-
+  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>(() => {
     const savedCategories = localStorage.getItem("billing_categories");
     return savedCategories
@@ -91,10 +90,21 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return savedConfig ? JSON.parse(savedConfig) : null;
   });
 
-  // Save to localStorage whenever state changes
+  const [uid, setUid] = useState<string | null>(null);
+
   useEffect(() => {
-    localStorage.setItem("billing_products", JSON.stringify(products));
-  }, [products]);
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUid(user.uid);
+      } else {
+        setUid(null);
+        setProducts([]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("billing_categories", JSON.stringify(categories));
@@ -108,34 +118,69 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem("billing_business_config", JSON.stringify(businessConfig));
   }, [businessConfig]);
 
-  // Check if business is configured
   const isConfigured = !!businessConfig;
 
-  // Products functions
-  const addProduct = (product: Omit<Product, "id">) => {
-    const newProduct: Product = {
-      ...product,
-      id: `prod-${Date.now()}`,
-    };
-    setProducts([...products, newProduct]);
-    toast.success("Product added successfully");
+  useEffect(() => {
+    if (!uid) return;
+
+    const productsRef = ref(database, `users/${uid}/products`);
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const loadedProducts = Object.values(data) as Product[];
+        setProducts(loadedProducts);
+      } else {
+        setProducts([]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [uid]);
+
+  const addProduct = async (product: Product) => {
+    if (!uid) {
+      toast.error("User not logged in");
+      return;
+    }
+
+    try {
+      const productRef = ref(database, `users/${uid}/products/${product.id}`);
+      await set(productRef, product);
+      toast.success("Product added successfully");
+    } catch (error) {
+      console.error("Error adding product:", error);
+      toast.error("Failed to save product to database");
+    }
   };
 
-  const updateProduct = (id: string, updatedFields: Partial<Product>) => {
-    setProducts(
-      products.map((product) =>
-        product.id === id ? { ...product, ...updatedFields } : product
-      )
-    );
-    toast.success("Product updated successfully");
+  const updateProduct = async (id: string, updatedFields: Partial<Product>) => {
+    if (!uid) {
+      toast.error("User not logged in");
+      return;
+    }
+
+    try {
+      const productRef = ref(database, `users/${uid}/products/${id}`);
+      await update(productRef, updatedFields);
+      toast.success("Product updated successfully");
+    } catch (error) {
+      console.error("Error updating product:", error);
+      toast.error("Failed to update product in database");
+    }
   };
 
-  const deleteProduct = (id: string) => {
-    setProducts(products.filter((product) => product.id !== id));
-    toast.success("Product deleted successfully");
+  const deleteProduct = async (id: string) => {
+    if (!uid) return;
+    try {
+      const productRef = ref(database, `users/${uid}/products/${id}`);
+      await remove(productRef);
+      toast.success("Product deleted successfully");
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      toast.error("Failed to delete product from database");
+    }
   };
 
-  // Category functions
   const addCategory = (name: string) => {
     const newCategory: Category = {
       id: `cat-${Date.now()}`,
@@ -150,15 +195,12 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     toast.success("Category deleted successfully");
   };
 
-  // Cart functions
   const addToCart = (product: Product) => {
     const existingItem = cart.find((item) => item.id === product.id);
     if (existingItem) {
       setCart(
         cart.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         )
       );
     } else {
@@ -172,9 +214,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       removeFromCart(id);
       return;
     }
-    setCart(
-      cart.map((item) => (item.id === id ? { ...item, quantity } : item))
-    );
+    setCart(cart.map((item) => (item.id === id ? { ...item, quantity } : item)));
   };
 
   const removeFromCart = (id: string) => {
@@ -186,37 +226,44 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCart([]);
   };
 
-  // Sales functions
-  const completeSale = (paymentMethod: string) => {
+  const completeSale = async (paymentMethod: string) => {
     if (cart.length === 0) {
       toast.error("Cart is empty");
       return;
     }
 
     const taxRate = businessConfig?.taxRate || 0;
-    const subtotal = cart.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
+    const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const tax = subtotal * (taxRate / 100);
     const grandTotal = subtotal + tax;
 
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
       items: [...cart],
-      total: subtotal,
+      total: subtotal,         // ⬅️ existing field
+      subtotal,                // ✅ new field added
       tax,
       grandTotal,
       date: new Date().toISOString(),
       paymentMethod,
     };
 
+    if (uid) {
+      try {
+        const saleRef = ref(database, `users/${uid}/sales`);
+        await push(saleRef, newSale);
+        toast.success("Sale saved to Firebase");
+      } catch (error) {
+        console.error("Error saving sale:", error);
+        toast.error("Failed to save sale to Firebase");
+      }
+    }
+
     setSales([newSale, ...sales]);
     clearCart();
     toast.success("Sale completed successfully");
   };
 
-  // Business config function
   const configBusiness = (config: BusinessConfig) => {
     setBusinessConfig(config);
     toast.success("Business configuration saved");

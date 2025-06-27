@@ -1,0 +1,15 @@
+{
+  "products": "Products",
+  "add_product": "Add Product",
+  "search_products": "Search products...",
+  "name": "Name",
+  "category": "Category",
+  "price": "Price",
+  "actions": "Actions",
+  "delete_product": "Delete Product",
+  "confirm_delete": "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "no_products_search": "No products match your search",
+  "no_products": "No products found"
+}

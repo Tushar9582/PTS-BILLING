@@ -1,0 +1,17 @@
+{
+  "cart": "Cart",
+  "hideCalculator": "Hide Calculator",
+  "thisTab": "this tab",
+  "subtotal": "Subtotal",
+  "discount": "Discount",
+  "type": "Type",
+  "flat": "Flat",
+  "discountAmount": "Discount Amount",
+  "total": "Total",
+  "clearTab": "Clear Tab",
+  "cancel": "Cancel",
+  "accountDisabled": "Account Disabled",
+  "accountDisabledDescription": "Your account has been disabled by the administrator.",
+  "date": "Date",
+  "time": "Time"
+}

@@ -44,7 +44,7 @@ const AppearanceSettings = () => {
         </div>
       </div>
       
-      <div>
+      {/* <div>
         <h3 className="text-lg font-medium mb-2">Button Style</h3>
         <RadioGroup 
           value={buttonStyle} 
@@ -64,7 +64,7 @@ const AppearanceSettings = () => {
             <Label htmlFor="neumorphic">Neumorphic</Label>
           </div>
         </RadioGroup>
-      </div>
+      </div> */}
     </div>
   );
 };

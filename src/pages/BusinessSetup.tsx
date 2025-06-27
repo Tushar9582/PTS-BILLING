@@ -1,83 +1,139 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { useBilling } from "@/contexts/BillingContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
-
-// ✅ Firebase imports
+import { useBilling } from "@/contexts/BillingContext";
+import CryptoJS from "crypto-js";
+import { ref, update } from "firebase/database";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import { auth, database } from "../firebase/firebaseConfig";
-import { ref, set } from "firebase/database";
+
+const SECRET_KEY = "your-very-secure-secret-key";
+
+const encrypt = (value: string) => {
+  return CryptoJS.AES.encrypt(value, SECRET_KEY).toString();
+};
 
 const BusinessSetup = () => {
   const navigate = useNavigate();
   const { setBusinessConfig, businessConfig } = useBilling();
+  const [uploading, setUploading] = React.useState(false);
+  const [isOtherType, setIsOtherType] = React.useState(
+    businessConfig?.type === "other"
+  );
+
   const [formState, setFormState] = React.useState({
     name: businessConfig?.name || "",
-    type: businessConfig?.type || "cafe",
+    type: businessConfig?.type || "",
     address: businessConfig?.address || "",
     phone: businessConfig?.phone || "",
     email: businessConfig?.email || "",
-    taxRate: businessConfig?.taxRate || 10,
+    taxRate: businessConfig?.taxRate || 0,
     logo: businessConfig?.logo || "",
+    gstNumber: businessConfig?.gstNumber || "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormState({
-      ...formState,
-      [name]: name === "taxRate" ? parseFloat(value) : value,
-    });
+    setFormState(prev => ({
+      ...prev,
+      [name]: name === "taxRate" ? parseFloat(value) || 0 : value,
+    }));
   };
 
   const handleSelectChange = (value: string) => {
-    setFormState({
-      ...formState,
-      type: value,
-    });
+    setIsOtherType(value === "other");
+    setFormState(prev => ({
+      ...prev,
+      type: value === "other" ? "" : value,
+    }));
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", "quick_bill_image");
+
+    setUploading(true);
+    try {
+      const res = await fetch(
+        "https://api.cloudinary.com/v1_1/db0zuhgnc/image/upload",
+        { method: "POST", body: formData }
+      );
+
+      if (!res.ok) throw new Error("Upload failed");
+
+      const data = await res.json();
+      setFormState(prev => ({ ...prev, logo: data.secure_url }));
+      toast.success("Logo uploaded successfully!");
+    } catch (error) {
+      toast.error("Image upload failed");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formState.name.trim() || !formState.address.trim() || !formState.phone.trim()) {
-      toast.error("Please fill in all required fields");
+    if (!formState.name || !formState.address || !formState.phone) {
+      toast.error("Please fill required fields");
       return;
     }
 
-    // ✅ Save to Context
-    setBusinessConfig({
-      name: formState.name,
-      type: formState.type,
-      address: formState.address,
-      phone: formState.phone,
-      email: formState.email,
-      taxRate: formState.taxRate,
-      logo: formState.logo,
-    });
+    setUploading(true);
 
-    // ✅ Save to Firebase Realtime Database
     try {
       const user = auth.currentUser;
-      if (user) {
-        await set(ref(database, `users/${user.uid}/business`), {
-          ...formState,
-        });
-        toast.success("Business setup completed!");
-        navigate("/dashboard");
-      } else {
-        toast.error("User not authenticated");
-      }
+      if (!user) throw new Error("No authenticated user");
+
+      const completeConfig = {
+        name: encrypt(formState.name),
+        type: encrypt(formState.type),
+        address: encrypt(formState.address),
+        phone: encrypt(formState.phone),
+        email: encrypt(formState.email),
+        gstNumber: encrypt(formState.gstNumber),
+        logo: encrypt(formState.logo),
+        taxRate: formState.taxRate,
+        active: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const updates = {
+        [`users/${user.uid}/business`]: completeConfig,
+        [`users/${user.uid}/accountStatus`]: "active",
+        [`users/${user.uid}/lastUpdated`]: new Date().toISOString()
+      };
+
+      await update(ref(database), updates);
+
+      await user.getIdToken(true);
+      await auth.currentUser?.reload();
+
+      setBusinessConfig(completeConfig);
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      navigate("/dashboard", { replace: true });
+      toast.success("Business setup completed successfully!");
     } catch (error: any) {
-      toast.error("Failed to save business data: " + error.message);
+      console.error("Setup error:", error);
+      toast.error(`Setup failed: ${error.message}`);
+    } finally {
+      setUploading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-billing-background flex items-center justify-center">
+    <div className="min-h-screen bg-billing-background flex items-center justify-center p-4">
       <Card className="w-full max-w-4xl shadow-lg animate-fade-in">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-3xl font-bold">Set Up Your Business</CardTitle>
@@ -97,10 +153,11 @@ const BusinessSetup = () => {
                     required
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="type">Business Type</Label>
                   <Select
-                    value={formState.type}
+                    value={isOtherType ? "other" : formState.type}
                     onValueChange={handleSelectChange}
                   >
                     <SelectTrigger>
@@ -114,6 +171,15 @@ const BusinessSetup = () => {
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
+                  {isOtherType && (
+                    <Input
+                      name="type"
+                      placeholder="Enter your business type"
+                      value={formState.type}
+                      onChange={handleChange}
+                      required
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -136,6 +202,7 @@ const BusinessSetup = () => {
                     value={formState.phone}
                     onChange={handleChange}
                     required
+                    inputMode="tel"
                   />
                 </div>
 
@@ -166,20 +233,63 @@ const BusinessSetup = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="logo">Logo URL (optional)</Label>
+                  <Label htmlFor="gstNumber">GST Number</Label>
                   <Input
-                    id="logo"
-                    name="logo"
-                    placeholder="https://your-logo-url.com/logo.png"
-                    value={formState.logo}
+                    id="gstNumber"
+                    name="gstNumber"
+                    type="text"
+                    placeholder="27ABCDE1234F1Z5"
+                    value={formState.gstNumber}
                     onChange={handleChange}
                   />
+                </div>
+
+                <div className="space-y-2 col-span-full">
+                  <Label htmlFor="logoUrl">Business Logo</Label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Input
+                        id="logoUrl"
+                        name="logoUrl"
+                        type="url"
+                        placeholder="Paste image URL"
+                        value={formState.logo}
+                        onChange={(e) =>
+                          setFormState(prev => ({ ...prev, logo: e.target.value }))
+                        }
+                        disabled={uploading}
+                        className="flex-1"
+                      />
+                      <span className="text-sm text-gray-500 flex items-center">OR</span>
+                      <Input
+                        id="logoFile"
+                        name="logoFile"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        disabled={uploading}
+                        className="flex-1"
+                      />
+                    </div>
+                    {formState.logo && (
+                      <img
+                        src={formState.logo}
+                        alt="Business Logo Preview"
+                        className="h-32 mt-2 object-contain border rounded-md mx-auto"
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <Button type="submit" className="w-full" size="lg">
-              Complete Setup
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={uploading}
+            >
+              {uploading ? "Saving..." : "Complete Setup"}
             </Button>
           </form>
         </CardContent>

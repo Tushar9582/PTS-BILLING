@@ -6,14 +6,21 @@ export const LanguageSwitcher = () => {
   const languages = {
     en: 'English',
     hi: 'हिंदी',
-    fr: 'Français'
+    mr: 'मराठी'
+  };
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem('language', lng);
+    // Force a re-render by reloading the page to apply language changes globally
+    window.location.reload();
   };
 
   return (
     <select
       value={i18n.language}
-      onChange={(e) => i18n.changeLanguage(e.target.value)}
-      className="border p-2 rounded"
+      onChange={(e) => changeLanguage(e.target.value)}
+      className="border p-2 rounded dark:bg-gray-800 dark:text-white dark:border-gray-600"
     >
       {Object.entries(languages).map(([code, name]) => (
         <option key={code} value={code}>

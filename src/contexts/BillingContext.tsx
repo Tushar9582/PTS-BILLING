@@ -6,6 +6,8 @@ import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 // Types
 export interface Product {
+  barcode: string;
+  description: string;
   id: string;
   name: string;
   price: number;
@@ -18,6 +20,7 @@ export interface CartItem extends Product {
 }
 
 export interface Category {
+  description: string;
   id: string;
   name: string;
 }

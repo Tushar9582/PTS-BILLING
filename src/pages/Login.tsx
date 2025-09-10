@@ -4,10 +4,12 @@ import {
   sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
+  signInWithPopup,
+  GoogleAuthProvider
 } from "firebase/auth";
-import { auth, database } from "../firebase/firebaseConfig";
-import { ref, get } from "firebase/database";
-import { useNavigate, Link } from "react-router-dom";
+import { auth, database, googleProvider } from "../firebase/firebaseConfig";
+import { ref, get, set } from "firebase/database";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { toast } from "@/components/ui/use-toast";
 import {
   AlertDialog,
@@ -18,19 +20,51 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff, ChevronLeft } from "lucide-react";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [animate, setAnimate] = useState(false);
   const [isDisabledDialogOpen, setIsDisabledDialogOpen] = useState(false);
+  const [termsDialogOpen, setTermsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
-  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [trialExpired, setTrialExpired] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check screen size on component mount and resize
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobileView(window.innerWidth < 1024);
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
+  // Detect if trial expired
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("reason") === "expired") {
+      setTrialExpired(true);
+      toast({
+        title: "Trial Expired",
+        description: "Your 15-day free trial has ended. Please subscribe to continue.",
+        variant: "destructive",
+      });
+    }
+  }, [location.search]);
 
   useEffect(() => {
     setAnimate(true);
@@ -65,30 +99,97 @@ const Login: React.FC = () => {
     return () => unsubscribe();
   }, [navigate]);
 
-const checkUserActiveStatus = async (userId: string) => {
-  console.log(`🔍 Checking active status for user: ${userId}`);
-  try {
-    const userRef = ref(database, `users/${userId}/business/active`);
-    console.log(`📡 Firebase reference path: users/${userId}/business/active`);
-
-    const snapshot = await get(userRef);
-
-    if (snapshot.exists()) {
-      const isActive = snapshot.val();
-      console.log(`✅ User active status found: ${isActive}`);
-      return isActive;
-    } else {
-      console.log('⚠️ No active status found. Defaulting to false.');
+  const checkUserActiveStatus = async (userId: string) => {
+    try {
+      const userRef = ref(database, `users/${userId}`);
+      const snapshot = await get(userRef);
+      
+      if (!snapshot.exists()) {
+        return false;
+      }
+      
+      const userData = snapshot.val();
+      
+      // Check if business data exists and if active status is set
+      if (userData.business && userData.business.active !== undefined) {
+        return userData.business.active;
+      }
+      
+      // If no business data or active status, assume inactive
+      return false;
+    } catch (error) {
+      console.error("Error checking user status:", error);
       return false;
     }
-  } catch (error) {
-    console.error("❌ Error checking user status:", error);
-    return false;
-  }
-};
+  };
 
+  // Improved trial status check
+  const checkTrialStatus = (userId: string) => {
+    try {
+      const trialData = localStorage.getItem(`15day_trial_${userId}`);
+      
+      // If no trial data in localStorage, check if user is new
+      if (!trialData) {
+        return { expired: false, valid: false };
+      }
+      
+      const { startTime, duration } = JSON.parse(trialData);
+      const endTime = startTime + duration;
+      const now = Date.now();
+      
+      return {
+        expired: now >= endTime,
+        valid: true,
+        daysRemaining: Math.max(0, Math.ceil((endTime - now) / (1000 * 60 * 60 * 24)))
+      };
+    } catch (error) {
+      console.error("Error checking trial status:", error);
+      return { expired: false, valid: false };
+    }
+  };
 
+  // Start trial timer for a user
+  const startTrialTimer = (userId: string) => {
+    const trialData = {
+      startTime: Date.now(), // Start timer from login moment
+      duration: 15 * 24 * 60 * 60 * 1000 // 15 days in milliseconds
+    };
+    localStorage.setItem(`15day_trial_${userId}`, JSON.stringify(trialData));
+    
+    // Also update in database for consistency
+    const userRef = ref(database, `users/${userId}/business`);
+    set(userRef, {
+      active: true,
+      trialStart: trialData.startTime,
+      trialDuration: trialData.duration
+    }).catch(error => {
+      console.error("Error updating trial data in database:", error);
+    });
+    
+    return trialData;
+  };
+
+  // Handle regular email/password login
   const handleLogin = async () => {
+    if (!email || !password) {
+      toast({
+        title: "Missing Fields",
+        description: "Please enter both email and password.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if terms are accepted
+    if (!termsAccepted) {
+      toast({
+        title: "Terms Required",
+        description: "Please accept the Terms and Conditions to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(
@@ -99,6 +200,22 @@ const checkUserActiveStatus = async (userId: string) => {
       const user = userCredential.user;
 
       setIsCheckingStatus(true);
+
+      // Check trial status from localStorage
+      const trialStatus = checkTrialStatus(user.uid);
+      
+      // If no trial data exists, start the trial timer
+      if (!trialStatus.valid) {
+        startTrialTimer(user.uid);
+      } else if (trialStatus.expired) {
+        setTrialExpired(true);
+        await signOut(auth);
+        navigate("/login?reason=expired", { replace: true });
+        setIsLoading(false);
+        return;
+      }
+
+      // Check if business account is active
       const isActive = await checkUserActiveStatus(user.uid);
       setIsCheckingStatus(false);
 
@@ -109,18 +226,140 @@ const checkUserActiveStatus = async (userId: string) => {
         return;
       }
 
+      // Navigate based on setup status
       const businessRef = ref(database, `users/${user.uid}/business`);
       const snapshot = await get(businessRef);
       navigate(snapshot.exists() ? "/dashboard" : "/setup", { replace: true });
     } catch (error: any) {
       setIsCheckingStatus(false);
+      let errorMessage = "Login failed. Please check your credentials.";
+      
+      if (error.code === "auth/invalid-email") {
+        errorMessage = "Invalid email address format.";
+      } else if (error.code === "auth/user-not-found") {
+        errorMessage = "No account found with this email.";
+      } else if (error.code === "auth/wrong-password") {
+        errorMessage = "Incorrect password.";
+      } else if (error.code === "auth/too-many-requests") {
+        errorMessage = "Too many failed attempts. Please try again later.";
+      }
+      
       toast({
         title: "Login Failed",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Handle Google Sign-In - Fixed for all devices
+  const handleGoogleSignIn = async () => {
+    // Check if terms are accepted for Google sign-in
+    if (!termsAccepted) {
+      toast({
+        title: "Terms Required",
+        description: "Please accept the Terms and Conditions to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setGoogleLoading(true);
+    try {
+      // For mobile devices, we might need to handle redirect instead of popup
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // Check if user exists in database, if not create a new record
+      const userRef = ref(database, `users/${user.uid}`);
+      const snapshot = await get(userRef);
+      
+      if (!snapshot.exists()) {
+        // Start trial timer for new users
+        const trialData = startTrialTimer(user.uid);
+        
+        // Create new user in database with proper structure
+        await set(ref(database, `users/${user.uid}`), {
+          email: user.email,
+          name: user.displayName,
+          photoURL: user.photoURL,
+          createdAt: Date.now(),
+          provider: "google",
+          // Add business data directly under user
+          business: {
+            active: true,
+            trialStart: trialData.startTime,
+            trialDuration: trialData.duration,
+          }
+        });
+      } else {
+        // For existing users, check if they have trial data
+        const trialStatus = checkTrialStatus(user.uid);
+        if (!trialStatus.valid) {
+          // If no trial data exists, start it now
+          startTrialTimer(user.uid);
+        }
+      }
+
+      // Check trial status using the improved function
+      const trialStatus = checkTrialStatus(user.uid);
+      
+      if (trialStatus.expired) {
+        setTrialExpired(true);
+        await signOut(auth);
+        toast({
+          title: "Trial Expired",
+          description: "Your 15-day free trial has ended. Please subscribe to continue.",
+          variant: "destructive",
+        });
+        setGoogleLoading(false);
+        return;
+      }
+
+      // Check if business account is active
+      const isActive = await checkUserActiveStatus(user.uid);
+      
+      if (!isActive) {
+        await signOut(auth);
+        setIsDisabledDialogOpen(true);
+        setGoogleLoading(false);
+        return;
+      }
+
+      // Navigate based on setup status
+      const businessRef = ref(database, `users/${user.uid}/business`);
+      const businessSnapshot = await get(businessRef);
+      
+      // For new Google sign-ins, business might not exist yet
+      if (!businessSnapshot.exists()) {
+        navigate("/setup", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
+      
+    } catch (error: any) {
+      console.error("Google Sign-In Error:", error);
+      let errorMessage = "Authentication failed. Please try again.";
+      
+      if (error.code === "auth/popup-closed-by-user") {
+        errorMessage = "Sign-in was canceled. Please try again.";
+      } else if (error.code === "auth/network-request-failed") {
+        errorMessage = "Network error. Please check your connection.";
+      } else if (error.code === "auth/popup-blocked") {
+        errorMessage = "Popup was blocked by your browser. Please allow popups for this site.";
+      } else if (error.code === "auth/unauthorized-domain") {
+        errorMessage = "This domain is not authorized for Google sign-in.";
+      }
+      
+      toast({
+        title: "Google Sign-In Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -141,9 +380,17 @@ const checkUserActiveStatus = async (userId: string) => {
         description: "Password reset email sent! Check your inbox.",
       });
     } catch (error: any) {
+      let errorMessage = "Failed to send password reset email";
+      
+      if (error.code === "auth/user-not-found") {
+        errorMessage = "No account found with this email address.";
+      } else if (error.code === "auth/invalid-email") {
+        errorMessage = "Invalid email address format.";
+      }
+      
       toast({
         title: "Error",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -151,8 +398,8 @@ const checkUserActiveStatus = async (userId: string) => {
 
   if (isCheckingAuth || isCheckingStatus) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-80 flex items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-cyan-300" />
+      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-white" />
       </div>
     );
   }
@@ -161,149 +408,381 @@ const checkUserActiveStatus = async (userId: string) => {
     return null;
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 font-sans relative">
-      {/* Background elements if needed, keeping it minimal as per Zoho image */}
+  // Mobile View
+  if (isMobileView) {
+    return (
+      <div className="min-h-screen bg-black p-6 font-sans relative text-white">
+        <div className="mb-8">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="flex items-center text-white mb-6"
+          >
+            <ChevronLeft className="h-5 w-5 mr-1" />
+            Back
+          </button>
+          
+          <div className="flex justify-center mb-8">
+            <img
+              src="https://res.cloudinary.com/defxobnc3/image/upload/v1752132668/log_jiy9id.png"
+              alt="Billing Software Logo"
+              className="w-20 h-20 filter brightness-0 invert"
+            />
+          </div>
+          
+          <h1 className="text-2xl font-bold text-center mb-2">Welcome Back</h1>
+          <p className="text-gray-400 text-center mb-8">
+            Sign in to your account to continue
+          </p>
+        </div>
 
-      <div className="flex bg-white rounded-lg shadow-xl overflow-hidden max-w-4xl w-full">
+        {/* Show Trial Expired Banner */}
+        {trialExpired && (
+          <div className="mb-6 p-3 rounded bg-red-600 text-white text-sm text-center">
+            ⏳ Your 15-day free trial has expired. Please subscribe to continue.
+          </div>
+        )}
+
+        <div className="space-y-4 mb-6">
+          <div>
+            <input
+              type="email"
+              placeholder="Email address or mobile number"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full text-white p-4 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-white placeholder-gray-400"
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full text-white p-4 pr-12 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-white placeholder-gray-400"
+              disabled={isLoading}
+            />
+            <button
+              type="button"
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 focus:outline-none"
+              onClick={() => setShowPassword(!showPassword)}
+              disabled={isLoading}
+            >
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="terms-mobile"
+              className="rounded bg-gray-800 border-gray-700"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              disabled={isLoading}
+            />
+            <label htmlFor="terms-mobile" className="text-sm text-gray-300">
+              I agree to the{" "}
+              <button
+                type="button"
+                className="text-blue-400 hover:text-blue-300 underline"
+                onClick={() => setTermsDialogOpen(true)}
+              >
+                Terms and Conditions
+              </button>
+            </label>
+          </div>
+          
+          <button
+            onClick={handleForgotPassword}
+            className="text-sm text-blue-400 hover:text-blue-300"
+            disabled={isLoading}
+          >
+            Forgot password?
+          </button>
+        </div>
+
+        <button
+          onClick={handleLogin}
+          disabled={isLoading || !termsAccepted}
+          className={`w-full py-4 rounded-lg bg-white text-black font-semibold text-lg transition duration-300 mb-6 ${
+            isLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-200"
+          }`}
+        >
+          {isLoading ? "Signing in..." : "Sign In"}
+        </button>
+
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-700"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-black text-gray-400">Or continue with</span>
+          </div>
+        </div>
+
+        <button
+          onClick={handleGoogleSignIn}
+          disabled={googleLoading || !termsAccepted}
+          className={`w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-medium py-3 rounded-lg border border-gray-700 transition duration-300 mb-6 ${
+            googleLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-800"
+          }`}
+        >
+          {googleLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <img
+              src="https://developers.google.com/identity/images/g-logo.png"
+              alt="Google logo"
+              className="w-5 h-5"
+            />
+          )}
+          {googleLoading ? "Signing in..." : "Sign in with Google"}
+        </button>
+
+        <p className="text-center text-gray-400 text-sm">
+          Don't have an account?{" "}
+          <Link
+            to="/register"
+            className="text-white font-medium hover:underline"
+            onClick={(e) => (isLoading || googleLoading) && e.preventDefault()}
+          >
+            Sign up
+          </Link>
+        </p>
+
+        <p className="text-center mt-4 text-xs text-gray-500">
+          By continuing, you agree to our{" "}
+          <button
+            onClick={() => setTermsDialogOpen(true)}
+            className="text-blue-400 hover:text-blue-300"
+          >
+            Terms and Conditions
+          </button>
+        </p>
+
+        {/* Terms and Conditions Dialog */}
+        <AlertDialog open={termsDialogOpen} onOpenChange={setTermsDialogOpen}>
+          <AlertDialogContent className="bg-black border-gray-800 text-white max-w-md mx-auto">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-xl">Terms & Conditions</AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-400 max-h-72 overflow-y-auto mt-4 text-sm space-y-3">
+                <p>1. This is a sample billing software for demonstration purposes only.</p>
+                <p>2. All user data is handled securely, but no guarantees are provided for data loss.</p>
+                <p>3. You must not use this software for any illegal or unauthorized purpose.</p>
+                <p>4. The company reserves the right to suspend accounts for policy violations.</p>
+                <p>5. You agree to receive system notifications and updates.</p>
+                <p>6. No responsibility is taken for misuse or incorrect billing amounts due to user error.</p>
+                <p>7. By using this software, you acknowledge that you understand and accept these terms.</p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction className="bg-white text-black hover:bg-gray-200">
+                I Understand
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Disabled Account Dialog */}
+        <AlertDialog open={isDisabledDialogOpen} onOpenChange={setIsDisabledDialogOpen}>
+          <AlertDialogContent className="bg-black border-gray-800 text-white max-w-md mx-auto">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-white">Account Disabled</AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-400">
+                Your account has been deactivated by the administrator. Please contact support to reactivate your account.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction className="bg-white text-black hover:bg-gray-200">
+                OK
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
+
+  // Desktop View
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-black p-4 font-sans relative">
+      <div className="flex bg-gray-800 rounded-lg overflow-hidden max-w-4xl w-full border border-white">
         {/* Left Section: Login Form */}
         <div className="flex-1 p-10 flex flex-col justify-between">
           <div>
-            {/* <div className="flex items-center mb-10">
-              <img
-                src="/zoho-logo.png" // Replace with your Zoho-like logo path
-                alt="Zoho Logo"
-                className="h-8 mr-2"
-              />
-              <span className="text-xl font-semibold text-gray-800">ZOHO</span>
-            </div> */}
+            <h2 className="text-2xl font-bold text-white mb-2">Sign in</h2>
 
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              Sign in
-            </h2>
-            {/* <p className="text-gray-600 mb-8">to access Zoho Home</p> */}
+            {/* Show Trial Expired Banner */}
+            {trialExpired && (
+              <div className="mb-4 p-3 rounded bg-red-600 text-white text-sm text-center">
+                ⏳ Your 15-day free trial has expired. Please subscribe to continue.
+              </div>
+            )}
 
             <input
               type="email"
               placeholder="Email address or mobile number"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full text-black p-3 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full text-white p-3 mb-4 bg-black border border-white rounded-md focus:outline-none focus:ring-1 focus:ring-white placeholder-gray-400"
               disabled={isLoading}
             />
 
-            {/* Password input field, kept visible for existing logic. Zoho shows this later. */}
             <div className="relative mb-6">
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full text-black p-3 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full text-white p-3 pr-10 bg-black border border-white rounded-md focus:outline-none focus:ring-1 focus:ring-white placeholder-gray-400"
                 disabled={isLoading}
               />
               <button
                 type="button"
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white focus:outline-none"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={isLoading}
               >
                 {showPassword ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                  </svg>
+                  <EyeOff className="h-5 w-5" />
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
+                  <Eye className="h-5 w-5" />
                 )}
               </button>
             </div>
+
+            {/* Terms & Conditions */}
+            <div className="mb-4 flex items-start space-x-2 text-sm text-white">
+              <input
+                type="checkbox"
+                id="terms"
+                className="mt-1"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                disabled={isLoading}
+              />
+              <label htmlFor="terms">
+                I agree to the{" "}
+                <button
+                  type="button"
+                  className="underline text-blue-400 hover:text-blue-300"
+                  onClick={() => setTermsDialogOpen(true)}
+                >
+                  Terms and Conditions
+                </button>
+              </label>
+            </div>
+
             <button
               onClick={handleLogin}
-              disabled={isLoading}
-              className={`w-full py-3 rounded-md bg-blue-600 text-white font-semibold text-lg transition duration-300 ${
-                isLoading ? "opacity-70 cursor-not-allowed" : "hover:bg-blue-700"
+              disabled={isLoading || !termsAccepted}
+              className={`w-full py-3 rounded-md bg-white text-black font-semibold text-lg transition duration-300 ${
+                isLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-200"
               }`}
             >
               {isLoading ? "Signing in..." : "Next"}
             </button>
 
-            {/* "Try smart sign-in" button */}
-            {/* <button className="flex items-center justify-center w-full py-2 mt-4 text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50 focus:outline-none">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-              Try smart sign-in
-            </button> */}
-
-            <div className="mt-8 text-gray-500">
-              <p className="mb-4">Sign in using</p>
-              <div className="flex justify-center space-x-4">
-                {/* Social Login Icons - Placeholder SVGs or Images */}
-                <button className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-100">
-                  <img src="https://img.icons8.com/color/48/000000/google-logo.png" alt="Google" className="h-6 w-6" />
-                </button>
-                <button className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-100">
-                  <img src="https://img.icons8.com/ios-filled/50/000000/facebook-new.png" alt="Facebook" className="h-6 w-6" />
-                </button>
-                <button className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-100">
-                  <img src="https://img.icons8.com/ios-filled/50/000000/linkedin.png" alt="LinkedIn" className="h-6 w-6" />
-                </button>
-                <button className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-100">
-                  <img src="https://img.icons8.com/ios-filled/50/000000/twitter.png" alt="Twitter" className="h-6 w-6" />
-                </button>
-                <button className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-100">
-                  <img src="https://img.icons8.com/ios-filled/50/000000/mac-os.png" alt="Apple" className="h-6 w-6" />
-                </button>
-                <button className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-100">
-                  <img src="https://img.icons8.com/ios-filled/50/000000/github.png" alt="Github" className="h-6 w-6" />
+            <div className="mt-8 text-gray-400">
+              <p className="mb-4 text-center">Or sign in using</p>
+              <div className="flex justify-center">
+                <button
+                  onClick={handleGoogleSignIn}
+                  disabled={googleLoading || !termsAccepted}
+                  className={`flex items-center justify-center bg-white text-gray-700 font-semibold py-2 px-4 rounded-md border border-gray-300 transition duration-300 ${
+                    googleLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-100"
+                  }`}
+                >
+                  {googleLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                  ) : (
+                    <img
+                      src="https://developers.google.com/identity/images/g-logo.png"
+                      alt="Google logo"
+                      className="w-5 h-5 mr-2"
+                    />
+                  )}
+                  {googleLoading ? "Signing in..." : "Sign in with Google"}
                 </button>
               </div>
             </div>
 
-            <p className="text-center mt-8 text-sm text-gray-600">
-              Don't have a Zoho account?{" "}
+            <p className="text-center mt-8 text-sm text-gray-400">
+              Don't have an account?{" "}
               <Link
                 to="/register"
-                className="text-blue-600 hover:underline"
-                onClick={(e) => isLoading && e.preventDefault()}
+                className="text-white hover:underline"
+                onClick={(e) => (isLoading || googleLoading) && e.preventDefault()}
               >
                 Sign up now
               </Link>
             </p>
+
+            <p className="text-center mt-4 text-sm text-gray-400">
+              <button
+                onClick={handleForgotPassword}
+                className="text-white hover:underline"
+                disabled={isLoading}
+              >
+                Forgot password?
+              </button>
+            </p>
           </div>
         </div>
 
-        {/* Right Section: Passwordless Sign-in */}
-        <div className="flex-1 bg-gradient-to-br from-blue-500 to-indigo-700 p-10 flex flex-col items-center justify-center text-white text-center">
-         <img
-  src="https://www.pawartechnologyservices.com/images/log.png"
-  alt="Passwordless Sign-in"
-  className="w-32 md:w-40 mb-6"
-/>
-
+        {/* Right Section */}
+        <div className="flex-1 bg-black p-10 flex flex-col items-center justify-center text-white text-center border-l border-white">
+          <img
+            src="https://res.cloudinary.com/defxobnc3/image/upload/v1752132668/log_jiy9id.png"
+            alt="Passwordless Sign-in"
+            className="w-32 md:w-40 mb-6 filter brightness-0 invert"
+          />
           <h3 className="text-xl font-bold mb-3">Billing Software</h3>
-          <p className="mb-6 opacity-90">
-           Create professional invoices in seconds—get paid faster with automated reminders and online payments
+          <p className="mb-6 text-gray-400">
+            Create professional invoices in seconds—get paid faster with automated reminders and online payments
           </p>
-          {/* <button className="px-6 py-2 border border-white rounded-md text-white hover:bg-white hover:text-blue-600 transition-colors duration-200">
-            Learn more
-          </button> */}
         </div>
       </div>
 
       {/* Disabled Account Dialog */}
       <AlertDialog open={isDisabledDialogOpen} onOpenChange={setIsDisabledDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-black border-white">
           <AlertDialogHeader>
-            <AlertDialogTitle>Account Disabled</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-white">Account Disabled</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
               Your account has been deactivated by the administrator. Please contact support to reactivate your account.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction className="bg-blue-600 hover:bg-blue-700">
+            <AlertDialogAction className="bg-white text-black hover:bg-gray-200">
               OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Terms and Conditions Dialog */}
+      <AlertDialog open={termsDialogOpen} onOpenChange={setTermsDialogOpen}>
+        <AlertDialogContent className="bg-black border-white text-white max-w-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">Terms & Conditions</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400 max-h-72 overflow-y-auto mt-4 text-sm space-y-3">
+              <p>1. This is a sample billing software for demonstration purposes only.</p>
+              <p>2. All user data is handled securely, but no guarantees are provided for data loss.</p>
+              <p>3. You must not use this software for any illegal or unauthorized purpose.</p>
+              <p>4. The company reserves the right to suspend accounts for policy violations.</p>
+              <p>5. You agree to receive system notifications and updates.</p>
+              <p>6. No responsibility is taken for misuse or incorrect billing amounts due to user error.</p>
+              <p>7. By using this software, you acknowledge that you understand and accept these terms.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction className="bg-white text-black hover:bg-gray-200">
+              I Understand
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

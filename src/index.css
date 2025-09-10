@@ -3,6 +3,10 @@
 @tailwind components;
 @tailwind utilities;
 
+* {
+   caret-color: transparent;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -105,7 +109,9 @@
 .glow-gold {
   box-shadow: 0 0 15px rgba(255, 215, 0, 0.6), 0 0 30px rgba(255, 215, 0, 0.4);
 }
-
+* {
+  caret-color: gray; 
+}
 
 .neon-button:hover {
   box-shadow: 0 0 15px 5px rgba(59, 130, 246, 0.5);

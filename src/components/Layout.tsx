@@ -36,7 +36,13 @@ import {
   Users,
   Utensils,
   X,
-  Zap
+  Zap,
+  ArrowLeft,
+  LogOut,
+  Home,
+  Tag,
+  PieChart,
+  MoreHorizontal
 } from "lucide-react";
 
 interface LayoutProps {
@@ -45,7 +51,6 @@ interface LayoutProps {
 
 const SECRET_KEY = import.meta.env.VITE_ENCRYPTION_KEY || "your-very-secure-secret-key";
 
-// Improved decryption function with better error handling
 const decryptField = (encrypted: string): string => {
   if (!encrypted || typeof encrypted !== 'string') {
     return encrypted || '';
@@ -54,20 +59,20 @@ const decryptField = (encrypted: string): string => {
   try {
     const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
     const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-    return decrypted || encrypted; // Return original if decryption fails but doesn't throw
+    return decrypted || encrypted;
   } catch (err) {
     console.warn("Decryption error for field:", encrypted);
-    return encrypted; // Return original value if decryption fails
+    return encrypted;
   }
 };
 
-// Safe number decryption with fallback
 const decryptNumberField = (encrypted: string, defaultValue = 0): number => {
   const decrypted = decryptField(encrypted);
   const num = parseFloat(decrypted);
   return isNaN(num) ? defaultValue : num;
 };
 
+// Move featureCards outside the component to prevent recreation on every render
 const featureCards = [
   {
     icon: <Zap className="w-8 h-8 text-yellow-500" />,
@@ -109,11 +114,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentFeature, setCurrentFeature] = useState(0);
   const [showCalculator, setShowCalculator] = useState(false);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation(); // Added i18n from useTranslation
+  const [languageChanged, setLanguageChanged] = useState(false);
 
   const navigate = useNavigate();
 
-  // Safely decrypt business config with fallbacks
+  // Track navigation history for back button
+  const [navHistory, setNavHistory] = useState<string[]>([]);
+
   const decryptedBusinessConfig = businessConfig ? {
     name: decryptField(businessConfig.name || ''),
     type: decryptField(businessConfig.type || 'cafe'),
@@ -132,6 +140,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     });
   };
 
+  const handleBackToLogin = () => {
+    navigate("/login");
+  };
+
   const handleCalculatorToggle = () => {
     setShowCalculator((prev) => !prev);
   };
@@ -139,7 +151,39 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
     localStorage.setItem('language', lng);
+    // Force a re-render by updating state
+    setLanguageChanged(prev => !prev);
   };
+
+  // Function to handle back navigation
+  const handleBack = () => {
+    if (navHistory.length > 1) {
+      // Remove current page from history
+      const newHistory = [...navHistory];
+      newHistory.pop();
+      setNavHistory(newHistory);
+      
+      // Navigate to previous page
+      const previousPath = newHistory[newHistory.length - 1];
+      navigate(previousPath);
+    } else {
+      // If no history, go to dashboard
+      navigate("/dashboard");
+    }
+  };
+
+  // Update navigation history when location changes
+  useEffect(() => {
+    if (isConfigured && location.pathname !== "/setup") {
+      setNavHistory(prev => {
+        // Don't add the same path consecutively
+        if (prev.length === 0 || prev[prev.length - 1] !== location.pathname) {
+          return [...prev, location.pathname];
+        }
+        return prev;
+      });
+    }
+  }, [location.pathname, isConfigured]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -148,11 +192,40 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     return () => clearInterval(interval);
   }, []);
   
+  // Get page title based on current route
+  const getPageTitle = () => {
+    const route = location.pathname;
+    if (route === "/dashboard") return t('Dashboard');
+    if (route === "/pos") return t('Point Of Sale');
+    if (route === "/products") return t('Products');
+    if (route === "/products/add") return t('Add Product');
+    if (route === "/categories") return t('Categories');
+    if (route === "/sales") return t('Sales History');
+    if (route === "/settings") return t('Settings');
+    return "QuickBill";
+  };
+  
   if (!isConfigured && location.pathname !== "/setup") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 overflow-auto py-8">
         <div className="w-full max-w-6xl px-4 py-4">
-          {/* Hero Section */}
+          {/* Back Button */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+            className="mb-6 flex justify-between items-center"
+          >
+            {/* Logout Button positioned the same way */}
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+            >
+              <LogOut className="w-5 h-5 mr-1" />
+              {t('Logout')}
+            </button>
+          </motion.div>
+
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -160,15 +233,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             className="text-center mb-8 md:mb-12"
           >
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-3 md:mb-4">
-              {t('welcome_to')} <span className="text-blue-600 dark:text-blue-400">QuickBill</span>
+              {t('Welcome_to')} <span className="text-blue-600 dark:text-blue-400">QuickBill</span>
             </h1>
             <h2 className="mb-5 mt-5 font-bold text-xl">by PTS</h2>
             <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto px-2">
-              {t('welcome_description')}
+              {t('Welcome_description')}
             </p>
           </motion.div>
   
-          {/* Feature Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-12 px-2">
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
@@ -180,10 +252,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-full mr-3">
                   <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{t('feature_1_title')}</h3>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{t('Feature_1_title')}</h3>
               </div>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                {t('feature_1_description')}
+                {t('Feature_1_description')}
               </p>
             </motion.div>
   
@@ -197,10 +269,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="bg-purple-100 dark:bg-purple-900/50 p-2 rounded-full mr-3">
                   <BarChart2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{t('feature_2_title')}</h3>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{t('Feature_2_title')}</h3>
               </div>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                {t('feature_2_description')}
+                {t('Feature_2_description')}
               </p>
             </motion.div>
   
@@ -217,12 +289,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{t('feature_3_title')}</h3>
               </div>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                {t('feature_3_description')}
+                {t('Feature_3_description')}
               </p>
             </motion.div>
           </div>
   
-          {/* Feature Showcase */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -230,13 +301,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             className="bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 rounded-xl md:rounded-2xl p-6 mb-8 md:mb-10 shadow-lg overflow-hidden relative mx-2"
           >
             <div className="relative z-10">
-              <div className="flex flex-col lg:flex-row items-center">
+              <div className="flex flex-col lg:flex-Row items-center">
                 <div className="w-full lg:w-1/2 mb-6 lg:mb-0 lg:pr-6">
                   <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
-                    {t('feature_showcase_title')}
+                    {t('Feature_showcase_title')}
                   </h2>
                   <p className="text-blue-100 mb-4 text-sm md:text-base">
-                    {t('feature_showcase_description')}
+                    {t('Feature_showcase_description')}
                   </p>
                   <div className="flex space-x-2">
                     {featureCards.map((_, index) => (
@@ -275,7 +346,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </motion.div>
   
-          {/* CTA Section */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -315,61 +385,84 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
+  // Define navItems inside the component to get fresh translations
   const navItems = [
     {
       name: t('Dashboard'),
       path: "/dashboard",
       icon: <LayoutDashboard size={20} />,
+      mobileIcon: <Home size={24} />,
       showWhen: isConfigured,
     },
     {
       name: t('Point Of Sale'),
       path: "/pos",
       icon: <ShoppingCart size={20} />,
+      mobileIcon: <ShoppingCart size={24} />,
       showWhen: isConfigured,
     },
     {
       name: t('Products'),
       path: "/products",
       icon: <Package size={20} />,
+      mobileIcon: <Tag size={24} />,
       showWhen: isConfigured,
     },
     {
       name: t('Add Product'),
       path: "/products/add",
       icon: <Plus size={20} />,
+      mobileIcon: <Plus size={24} />,
       showWhen: isConfigured,
     },
     {
       name: t('Categories'),
       path: "/categories",
       icon: <List size={20} />,
+      mobileIcon: <List size={24} />,
       showWhen: isConfigured,
     },
     {
       name: t('Sales History'),
       path: "/sales",
       icon: <FileText size={20} />,
+      mobileIcon: <PieChart size={24} />,
       showWhen: isConfigured,
     },
     {
       name: t('Settings'),
       path: "/settings",
       icon: <Settings size={20} />,
+      mobileIcon: <Settings size={24} />,
       showWhen: true,
     },
   ];
 
   const filteredNavItems = navItems.filter((item) => item.showWhen);
 
+  // Mobile navigation items (limited to 4 main items like WhatsApp)
+  const mobileNavItems = filteredNavItems.filter(item => 
+    ['/dashboard', '/pos', '/products', '/sales'].includes(item.path)
+  );
+
+  // Check if we should show the back button
+  const shouldShowBackButton = isConfigured && 
+    location.pathname !== "/dashboard" && 
+    location.pathname !== "/setup" &&
+    location.pathname !== "/";
+
   const SidebarContent = () => (
     <>
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <h1 className="text-xl font-bold text-billing-dark dark:text-white">QuickBill</h1>
+      </div>
+      
       {decryptedBusinessConfig?.name && (
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
           {getBusinessIcon(decryptedBusinessConfig.type)}
           <div>
-            <h2 className="text-base font-medium dark:text-white">{decryptedBusinessConfig.name}</h2>
-            <p className="text-xs text-billing-secondary dark:text-gray-400 capitalize">
+            <h2 className="text-base font-medium dark:text-white truncate">{decryptedBusinessConfig.name}</h2>
+            <p className="text-xs text-billing-secondary dark:text-gray-400 capitalize truncate">
               {decryptedBusinessConfig.type || t('business')}
             </p>
           </div>
@@ -384,7 +477,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 to={item.path}
                 onClick={() => isMobile && setSidebarOpen(false)}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-3 rounded-md transition-colors ${
+                  `flex items-center gap-3 px-4 py-3 rounded-md transition-colors text-sm md:text-base ${
                     isActive
                       ? "bg-billing-primary text-white dark:bg-blue-600"
                       : "text-billing-dark dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -392,88 +485,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 }
               >
                 {item.icon}
-                <span>{item.name}</span>
+                <span className="truncate">{item.name}</span>
               </NavLink>
             </li>
           ))}
         </ul>
         
         <div className="px-3 py-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button 
-                variant="outline" 
-                className="flex items-center gap-2 w-full justify-start dark:border-gray-700 dark:text-gray-200"
-              >
-                <Palette size={20} />
-                <span>{t('Appearance')}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="start">
-              <div className="grid gap-4">
-                <div className="flex items-center gap-4">
-                  <Button 
-                    variant={theme === "light" ? "default" : "outline"}
-                    size="sm"
-                    className="flex items-center gap-2"
-                    onClick={() => setTheme("light")}
-                  >
-                    <Sun className="h-4 w-4" />
-                    {t('Light')}
-                  </Button>
-                  <Button
-                    variant={theme === "dark" ? "default" : "outline"}
-                    size="sm"
-                    className="flex items-center gap-2"
-                    onClick={() => setTheme("dark")}
-                  >
-                    <Moon className="h-4 w-4" />
-                    {t('Dark')}
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button 
-                variant="outline" 
-                className="flex items-center gap-2 w-full justify-start dark:border-gray-700 dark:text-gray-200 mt-2"
-              >
-                <Languages size={20} />
-                <span>{t('Language')}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48" align="start">
-              <div className="grid gap-2">
-                <Button
-                  variant={i18n.language === 'en' ? "default" : "outline"}
-                  size="sm"
-                  className="justify-start"
-                  onClick={() => changeLanguage('en')}
-                >
-                  {t('English')}
-                </Button>
-                <Button
-                  variant={i18n.language === 'hi' ? "default" : "outline"}
-                  size="sm"
-                  className="justify-start"
-                  onClick={() => changeLanguage('hi')}
-                >
-                  {t('Hindi')}
-                </Button>
-                <Button
-                  variant={i18n.language === 'mr' ? "default" : "outline"}
-                  size="sm"
-                  className="justify-start"
-                  onClick={() => changeLanguage('mr')}
-                >
-                  {t('Marathi')}
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
 
           <div className="mt-4 flex justify-center">
             <Button
@@ -490,50 +508,82 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-billing-background dark:bg-gray-900 overflow-hidden">
-      {/* Mobile Header */}
-      {isMobile && (
-        <div className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-gray-800 z-50 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center">
-            <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" className="mr-3 p-2 rounded-md dark:text-white">
-                  <Menu size={20} />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-72 p-0 bg-white dark:bg-gray-800">
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                  <h1 className="text-xl font-bold text-billing-dark dark:text-white">QuickBill</h1>
-                  <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(false)}>
-                    <X size={16} />
-                  </Button>
-                </div>
-                <SidebarContent />
-              </SheetContent>
-            </Sheet>
-            <h1 className="text-xl font-bold text-billing-dark dark:text-white">QuickBill</h1>
-          </div>
-          
-          {location.pathname === "/pos" && (
-            <div className="text-sm font-medium text-billing-secondary dark:text-gray-300">
-              {t('point_of_sale')}
-            </div>
-          )}
-        </div>
-      )}
-      
       {/* Desktop Sidebar */}
       {!isMobile && (
-        <aside className="w-64 relative bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm h-screen">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h1 className="text-xl font-bold text-billing-dark dark:text-white">QuickBill</h1>
-          </div>
+        <aside className="w-64 relative bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm h-screen flex-shrink-0">
           <SidebarContent />
         </aside>
       )}
 
       {/* Main content */}
-      <main className={`flex-1 overflow-auto ${isMobile ? "pt-16" : ""} dark:text-white`}>
-        <div className="p-4 md:p-6">{children}</div>
+      <main className={`flex-1 overflow-auto ${isMobile ? "pb-16" : ""} dark:text-white`}>
+        {/* Mobile Header with WhatsApp-style bottom navigation */}
+        {isMobile && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-50">
+            <div className="flex justify-around items-center h-16">
+              {mobileNavItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `flex items-center justify-center w-full h-full transition-colors ${
+                      isActive
+                        ? "text-billing-primary dark:text-blue-400"
+                        : "text-gray-500 dark:text-gray-400"
+                    }`
+                  }
+                >
+                  {item.mobileIcon}
+                </NavLink>
+              ))}
+              
+              {/* More menu button */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    className={`flex items-center justify-center w-full h-full ${
+                      location.pathname === "/settings" || 
+                      location.pathname === "/categories" || 
+                      location.pathname === "/products/add"
+                        ? "text-billing-primary dark:text-blue-400" 
+                        : "text-gray-500 dark:text-gray-400"
+                    }`}
+                  >
+                    <MoreHorizontal size={24} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 mb-2 p-2" align="center" side="top">
+                  <div className="grid gap-1">
+                    {filteredNavItems
+                      .filter(item => !mobileNavItems.some(mobileItem => mobileItem.path === item.path))
+                      .map((item) => (
+                        <NavLink
+                          key={item.path}
+                          to={item.path}
+                          className={({ isActive }) => 
+                            `flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
+                              isActive 
+                                ? "bg-billing-primary text-white" 
+                                : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                            }`
+                          }
+                          onClick={() => document.body.click()} // Close popover on click
+                        >
+                          {item.icon}
+                          <span>{item.name}</span>
+                        </NavLink>
+                      ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        )}
+        
+        <div className={`p-4 md:p-6 h-full overflow-auto scrollbar-hide ${isMobile ? "pb-4" : ""}`}>
+          {children}
+        </div>
       </main>
     </div>
   );

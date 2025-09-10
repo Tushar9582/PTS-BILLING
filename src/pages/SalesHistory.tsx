@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { auth, database } from "@/firebase/firebaseConfig";
-import { onValue, ref, remove } from "firebase/database";
+import { onValue, ref, remove, update } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/use-toast";
 import * as XLSX from 'xlsx';
@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useTranslation } from "react-i18next";
 import CryptoJS from "crypto-js";
+import { format } from "date-fns";
 
 const SECRET_KEY = import.meta.env.VITE_ENCRYPTION_KEY || "your-very-secure-secret-key";
 
@@ -96,7 +97,16 @@ const decryptSaleData = (sale: any) => {
         customerInfo: sale.customerInfo ? {
             name: decryptField(sale.customerInfo.name || ''),
             phone: decryptField(sale.customerInfo.phone || ''),
-            email: sale.customerInfo.email ? decryptField(sale.customerInfo.email) : undefined
+            email: sale.customerInfo.email ? decryptField(sale.customerInfo.email) : undefined,
+            paymentTerms: sale.customerInfo.paymentTerms || 'due_on_receipt',
+            dueDate: sale.customerInfo.dueDate || null,
+            lateFeeEnabled: sale.customerInfo.lateFeeEnabled || false,
+            lateFeeAmount: sale.customerInfo.lateFeeAmount || 0,
+            lateFeeType: sale.customerInfo.lateFeeType || 'percentage',
+            remindersSent: sale.customerInfo.remindersSent || 0,
+            lastReminderSent: sale.customerInfo.lastReminderSent || null,
+            isPaid: sale.customerInfo.isPaid || false,
+            paymentDate: sale.customerInfo.paymentDate || null
         } : undefined
     };
 };
@@ -207,6 +217,39 @@ const SalesHistory = () => {
         }
     };
 
+    const handleMarkAsPaid = async (saleId: string) => {
+        try {
+            const user = auth.currentUser;
+            if (!user) {
+                throw new Error(t('notSignedIn'));
+            }
+
+            const now = new Date().toISOString();
+            const updates: any = {};
+            const salePath = `users/${user.uid}/sales/${saleId}`;
+            
+            updates[`${salePath}/customerInfo/isPaid`] = true;
+            updates[`${salePath}/customerInfo/paymentDate`] = now;
+            
+            await update(ref(database), updates);
+            
+            toast({
+                title: t('success'),
+                description: t('markedAsPaid'),
+            });
+            
+            await refreshSales();
+            
+        } catch (error) {
+            console.error("Error marking as paid:", error);
+            toast({
+                title: t('error'),
+                description: t('markPaidError'),
+                variant: "destructive",
+            });
+        }
+    };
+
     const exportToExcel = () => {
         if (filteredSales.length === 0) {
             toast({
@@ -228,6 +271,12 @@ const SalesHistory = () => {
             [t('tax')]: sale.tax || 0,
             [t('total')]: sale.grandTotal,
             [t('paymentMethod')]: sale.paymentMethod,
+            [t('paymentStatus')]: sale.customerInfo?.isPaid ? t('paid') : t('unpaid'),
+            [t('dueDate')]: sale.customerInfo?.dueDate ? 
+                new Date(sale.customerInfo.dueDate).toLocaleDateString() : t('dueOnReceipt'),
+            [t('lateFee')]: sale.customerInfo?.lateFeeEnabled ? 
+                `${sale.customerInfo.lateFeeAmount}${sale.customerInfo.lateFeeType === 'percentage' ? '%' : ''}` : t('none'),
+            [t('remindersSent')]: sale.customerInfo?.remindersSent || 0,
         }));
 
         const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -275,6 +324,25 @@ const SalesHistory = () => {
         return () => unsubscribe();
     }, [navigate, t]);
 
+    const getPaymentStatus = (sale: any) => {
+        if (sale.customerInfo?.isPaid) {
+            return <span className="text-green-600">{t('Paid')}</span>;
+        }
+        
+        const dueDate = sale.customerInfo?.dueDate ? new Date(sale.customerInfo.dueDate) : null;
+        const now = new Date();
+        
+        if (!dueDate) {
+            return <span className="text-yellow-600">{t('DueOnReceipt')}</span>;
+        }
+        
+        if (now > dueDate) {
+            return <span className="text-red-600">{t('Overdue')}</span>;
+        }
+        
+        return <span className="text-blue-600">{t('Due')} {format(dueDate, 'MMM dd')}</span>;
+    };
+
     if (isLoading) {
         return (
             <Layout>
@@ -288,29 +356,29 @@ const SalesHistory = () => {
     
     return (
         <Layout>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-billing-dark dark:text-white">
-                    {t('salesHistory')}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <h1 className="text-2xl sm:text-3xl font-bold text-billing-dark dark:text-white">
+                    {t('SalesHistory')}
                 </h1>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     <Select 
                         value={timeRange} 
                         onValueChange={(value: "all" | "todays" | "week" | "month" | "year") => setTimeRange(value)}
                     >
-                        <SelectTrigger className="w-[120px]">
-                            <SelectValue placeholder={t('timeRange')} />
+                        <SelectTrigger className="w-full sm:w-[140px]">
+                            <SelectValue placeholder={t('TimeRange')} />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">{t('allTime')}</SelectItem>
-                            <SelectItem value="todays">{t('todays')}</SelectItem>
-                            <SelectItem value="week">{t('thisWeek')}</SelectItem>
-                            <SelectItem value="month">{t('thisMonth')}</SelectItem>
-                            <SelectItem value="year">{t('thisYear')}</SelectItem>
+                            <SelectItem value="all">{t('AllTime')}</SelectItem>
+                            <SelectItem value="todays">{t('Todays')}</SelectItem>
+                            <SelectItem value="week">{t('ThisWeek')}</SelectItem>
+                            <SelectItem value="month">{t('ThisMonth')}</SelectItem>
+                            <SelectItem value="year">{t('ThisYear')}</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button onClick={exportToExcel}>
-                        <Download className="mr-2 h-4 w-4" />
-                        {t('export')}
+                    <Button onClick={exportToExcel} className="w-full sm:w-auto">
+                        <Download className="h-4 w-4 mr-1 sm:mr-2" />
+                        {t('Export')}
                     </Button>
                 </div>
             </div>
@@ -320,14 +388,14 @@ const SalesHistory = () => {
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
                         <Input
-                            placeholder={t('searchPlaceholder')}
+                            placeholder={t('SearchPlaceholder')}
                             className="pl-10"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Calendar className="text-billing-secondary h-4 w-4" />
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <Calendar className="text-billing-secondary h-4 w-4 flex-shrink-0" />
                         <Input
                             type="date"
                             value={dateFilter}
@@ -342,15 +410,15 @@ const SalesHistory = () => {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>{t('date')}</TableHead>
-                                    <TableHead>{t('saleId')}</TableHead>
-                                    <TableHead>{t('customer')}</TableHead>
-                                    <TableHead>{t('phone')}</TableHead>
-                                    <TableHead>{t('items')}</TableHead>
-                                    <TableHead>{t('total')}</TableHead>
-                                    <TableHead>{t('discount')}</TableHead>
-                                    <TableHead>{t('payment')}</TableHead>
-                                    <TableHead>{t('actions')}</TableHead>
+                                    <TableHead>{t('Date')}</TableHead>
+                                    <TableHead>{t('SaleId')}</TableHead>
+                                    <TableHead>{t('Customer')}</TableHead>
+                                    <TableHead>{t('Phone')}</TableHead>
+                                    <TableHead>{t('Items')}</TableHead>
+                                    <TableHead>{t('Total')}</TableHead>
+                                    <TableHead>{t('Status')}</TableHead>
+                                    <TableHead>{t('Payment')}</TableHead>
+                                    <TableHead className="text-right">{t('Actions')}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -367,92 +435,124 @@ const SalesHistory = () => {
                                             <TableCell>{sale.customerName || t('na')}</TableCell>
                                             <TableCell>{sale.customerPhone || t('na')}</TableCell>
                                             <TableCell>
-                                                {sale.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)} {t('items')}
+                                                {sale.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)} {t('Items')}
                                             </TableCell>
                                             <TableCell>{formatCurrency(sale.grandTotal)}</TableCell>
-                                            <TableCell className="text-red-500">
-                                                {formatCurrency(sale.discountAmount || 0)}
+                                            <TableCell>
+                                                {getPaymentStatus(sale)}
+                                                {sale.customerInfo?.lateFeeEnabled && (
+                                                    <div className="text-xs text-red-500">
+                                                        +{formatCurrency(sale.customerInfo.lateFeeAmount || 0)}
+                                                    </div>
+                                                )}
                                             </TableCell>
                                             <TableCell className="capitalize">{sale.paymentMethod}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Dialog>
-                                                        <DialogTrigger asChild>
-                                                            <Button variant="ghost" size="icon">
-                                                                <FileText className="h-4 w-4" />
-                                                            </Button>
-                                                        </DialogTrigger>
-                                                        <DialogContent className="max-w-md print:text-xl print:scale-[1.25] print:p-6">
-                                                            <DialogHeader>
-                                                                <DialogTitle className="print:text-2xl">
-                                                                    {t('saleDetails')}
-                                                                </DialogTitle>
-                                                            </DialogHeader>
-                                                            <div className="flex justify-end mt-2 print:hidden">
-                                                                <Button variant="outline" onClick={() => window.print()}>
-                                                                    {t('print')}
-                                                                </Button>
-                                                            </div>
-                                                            
-                                                            <div className="py-4 space-y-4">
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span className="text-billing-secondary">{t('saleId')}:</span>
-                                                                    <span className="font-medium">{sale.id}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span className="text-billing-secondary">{t('date')}:</span>
-                                                                    <span className="font-medium">
-                                                                        {new Date(sale.date).toLocaleString()}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span className="text-billing-secondary">{t('customerName')}:</span>
-                                                                    <span className="font-medium">{sale.customerName || t('na')}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span className="text-billing-secondary">{t('customerPhone')}:</span>
-                                                                    <span className="font-medium">{sale.customerPhone || t('na')}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span className="text-billing-secondary">{t('paymentMethod')}:</span>
-                                                                    <span className="font-medium capitalize">{sale.paymentMethod}</span>
-                                                                </div>
-                                                                
-                                                                <div className="border-t pt-4">
-                                                                    <h4 className="font-medium mb-2">{t('items')}</h4>
-                                                                    <div className="space-y-2">
-                                                                        {sale.items?.map((item, index) => (
-                                                                            <div key={index} className="flex justify-between text-sm">
-                                                                                <span>
-                                                                                    {item.name} x {item.quantity}
-                                                                                </span>
-                                                                                <span>{formatCurrency((item.price || 0) * (item.quantity || 0))}</span>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                                
-                                                                <div className="border-t pt-4 space-y-2">
-                                                                    <div className="flex justify-between text-sm">
-                                                                        <span>{t('subtotal')}</span>
-                                                                        <span>{formatCurrency(sale.subtotal)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between text-sm text-red-500">
-                                                                        <span>{t('discount')}</span>
-                                                                        <span>-{formatCurrency(sale.discountAmount || 0)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between text-sm">
-                                                                        <span>{t('tax')}</span>
-                                                                        <span>{formatCurrency(sale.tax || 0)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between font-bold pt-2 border-t">
-                                                                        <span>{t('total')}</span>
-                                                                        <span>{formatCurrency(sale.grandTotal)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </DialogContent>
-                                                    </Dialog>
+    <DialogTrigger asChild>
+        <Button variant="ghost" size="icon">
+            <FileText className="h-4 w-4" />
+        </Button>
+    </DialogTrigger>
+    <DialogContent className="max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto print:text-xl print:scale-[1.25] print:p-6">
+        <DialogHeader className="text-left">
+            <DialogTitle className="print:text-2xl text-xl">
+                {t('SaleDetails')}
+            </DialogTitle>
+        </DialogHeader>
+        <div className="flex justify-end mt-2 print:hidden">
+            <Button variant="outline" onClick={() => window.print()}>
+                {t('Print')}
+            </Button>
+        </div>
+        
+        <div className="py-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('SaleId')}:</span>
+                    <span className="font-medium text-right">{sale.id}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('Date')}:</span>
+                    <span className="font-medium text-right">
+                        {new Date(sale.date).toLocaleString()}
+                    </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('CustomerName')}:</span>
+                    <span className="font-medium text-right">{sale.customerName || t('na')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('CustomerPhone')}:</span>
+                    <span className="font-medium text-right">{sale.customerPhone || t('na')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('PaymentMethod')}:</span>
+                    <span className="font-medium text-right capitalize">{sale.paymentMethod}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('PaymentStatus')}:</span>
+                    <span className="font-medium text-right">
+                        {getPaymentStatus(sale)}
+                    </span>
+                </div>
+            </div>
+            
+            <div className="border-t pt-4">
+                <h4 className="font-medium mb-3 text-lg">{t('Items')}</h4>
+                <div className="space-y-3">
+                    {sale.items?.map((item, index) => (
+                        <div key={index} className="flex justify-between text-sm items-center py-1">
+                            <span className="flex-1">
+                                {item.name} x {item.quantity}
+                            </span>
+                            <span className="font-medium">{formatCurrency((item.price || 0) * (item.quantity || 0))}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            
+            <div className="border-t pt-4 space-y-3">
+                <div className="flex justify-between text-sm">
+                    <span>{t('Subtotal')}</span>
+                    <span className="font-medium">{formatCurrency(sale.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-red-500">
+                    <span>{t('Discount')}</span>
+                    <span className="font-medium">-{formatCurrency(sale.discountAmount || 0)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span>{t('Tax')}</span>
+                    <span className="font-medium">{formatCurrency(sale.tax || 0)}</span>
+                </div>
+                {sale.customerInfo?.lateFeeEnabled && (
+                    <div className="flex justify-between text-sm text-red-500">
+                        <span>{t('LateFee')}</span>
+                        <span className="font-medium">+{formatCurrency(sale.customerInfo.lateFeeAmount || 0)}</span>
+                    </div>
+                )}
+                <div className="flex justify-between font-bold pt-3 border-t text-lg">
+                    <span>{t('Total')}</span>
+                    <span>{formatCurrency(sale.grandTotal)}</span>
+                </div>
+            </div>
+        </div>
+    </DialogContent>
+</Dialog>
+                                                    
+                                                    {!sale.customerInfo?.isPaid && (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon"
+                                                            className="text-blue-500 hover:text-blue-700"
+                                                            onClick={() => handleMarkAsPaid(sale.id)}
+                                                            title={t('markAsPaid')}
+                                                        >
+                                                            <FileText className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    
                                                     <Button 
                                                         variant="ghost" 
                                                         size="icon" 
@@ -461,6 +561,7 @@ const SalesHistory = () => {
                                                             setSaleToDelete(sale.id);
                                                             setDeleteDialogOpen(true);
                                                         }}
+                                                        title={t('Delete')}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
@@ -489,75 +590,102 @@ const SalesHistory = () => {
                                             </div>
                                             <div className="flex gap-2">
                                                 <Dialog>
-                                                    <DialogTrigger asChild>
-                                                        <Button variant="outline" size="sm" className="h-8">
-                                                            <FileText className="h-4 w-4 mr-1" /> {t('details')}
-                                                        </Button>
-                                                    </DialogTrigger>
-                                                    <DialogContent className="max-w-md">
-                                                        <DialogHeader>
-                                                            <DialogTitle>{t('saleDetails')}</DialogTitle>
-                                                        </DialogHeader>
-                                                        
-                                                        <div className="py-4 space-y-4">
-                                                            <div className="flex justify-between text-sm">
-                                                                <span className="text-billing-secondary">{t('saleId')}:</span>
-                                                                <span className="font-medium">{sale.id}</span>
-                                                            </div>
-                                                            <div className="flex justify-between text-sm">
-                                                                <span className="text-billing-secondary">{t('date')}:</span>
-                                                                <span className="font-medium">
-                                                                    {new Date(sale.date).toLocaleString()}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex justify-between text-sm">
-                                                                <span className="text-billing-secondary">{t('customerName')}:</span>
-                                                                <span className="font-medium">{sale.customerName || t('na')}</span>
-                                                            </div>
-                                                            <div className="flex justify-between text-sm">
-                                                                <span className="text-billing-secondary">{t('customerPhone')}:</span>
-                                                                <span className="font-medium">{sale.customerPhone || t('na')}</span>
-                                                            </div>
-                                                            <div className="flex justify-between text-sm">
-                                                                <span className="text-billing-secondary">{t('paymentMethod')}:</span>
-                                                                <span className="font-medium capitalize">{sale.paymentMethod}</span>
-                                                            </div>
-                                                            
-                                                            <div className="border-t pt-4">
-                                                                <h4 className="font-medium mb-2">{t('items')}</h4>
-                                                                <div className="space-y-2">
-                                                                    {sale.items?.map((item, index) => (
-                                                                        <div key={index} className="flex justify-between text-sm">
-                                                                            <span>
-                                                                                {item.name} x {item.quantity}
-                                                                            </span>
-                                                                            <span>{formatCurrency((item.price || 0) * (item.quantity || 0))}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                            
-                                                            <div className="border-t pt-4 space-y-2">
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span>{t('subtotal')}</span>
-                                                                    <span>{formatCurrency(sale.subtotal)}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-sm text-red-500">
-                                                                    <span>{t('discount')}</span>
-                                                                    <span>{formatCurrency(sale.discountAmount || 0)}</span>
-                                                                </div>
-                                                                <div className="flex justify-between text-sm">
-                                                                    <span>{t('tax')}</span>
-                                                                    <span>{formatCurrency(sale.tax || 0)}</span>
-                                                                </div>
-                                                                <div className="flex justify-between font-bold pt-2 border-t">
-                                                                    <span>{t('total')}</span>
-                                                                    <span>{formatCurrency(sale.grandTotal)}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </DialogContent>
-                                                </Dialog>
+    <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8">
+            <FileText className="h-4 w-4 mr-1" /> {t('Details')}
+        </Button>
+    </DialogTrigger>
+    <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+            <DialogTitle>{t('SaleDetails')}</DialogTitle>
+        </DialogHeader>
+        
+        <div className="py-4 space-y-4">
+            <div className="grid grid-cols-1 gap-3">
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('SaleId')}:</span>
+                    <span className="font-medium text-right">{sale.id}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('Date')}:</span>
+                    <span className="font-medium text-right">
+                        {new Date(sale.date).toLocaleString()}
+                    </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('CustomerName')}:</span>
+                    <span className="font-medium text-right">{sale.customerName || t('na')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('CustomerPhone')}:</span>
+                    <span className="font-medium text-right">{sale.customerPhone || t('na')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('PaymentMethod')}:</span>
+                    <span className="font-medium text-right capitalize">{sale.paymentMethod}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-billing-secondary">{t('PaymentStatus')}:</span>
+                    <span className="font-medium text-right">
+                        {getPaymentStatus(sale)}
+                    </span>
+                </div>
+            </div>
+            
+            <div className="border-t pt-4">
+                <h4 className="font-medium mb-3">{t('Items')}</h4>
+                <div className="space-y-2">
+                    {sale.items?.map((item, index) => (
+                        <div key={index} className="flex justify-between text-sm items-center">
+                            <span className="flex-1">
+                                {item.name} x {item.quantity}
+                            </span>
+                            <span className="font-medium">{formatCurrency((item.price || 0) * (item.quantity || 0))}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            
+            <div className="border-t pt-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                    <span>{t('Subtotal')}</span>
+                    <span className="font-medium">{formatCurrency(sale.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-red-500">
+                    <span>{t('Discount')}</span>
+                    <span className="font-medium">-{formatCurrency(sale.discountAmount || 0)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                    <span>{t('Tax')}</span>
+                    <span className="font-medium">{formatCurrency(sale.tax || 0)}</span>
+                </div>
+                {sale.customerInfo?.lateFeeEnabled && (
+                    <div className="flex justify-between text-sm text-red-500">
+                        <span>{t('LateFee')}</span>
+                        <span className="font-medium">+{formatCurrency(sale.customerInfo.lateFeeAmount || 0)}</span>
+                    </div>
+                )}
+                <div className="flex justify-between font-bold pt-2 border-t">
+                    <span>{t('Total')}</span>
+                    <span>{formatCurrency(sale.grandTotal)}</span>
+                </div>
+            </div>
+            
+            {!sale.customerInfo?.isPaid && (
+                <div className="pt-4 border-t">
+                    <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="w-full"
+                        onClick={() => handleMarkAsPaid(sale.id)}
+                    >
+                        <FileText className="h-4 w-4 mr-1" /> {t('markAsPaid')}
+                    </Button>
+                </div>
+            )}
+        </div>
+    </DialogContent>
+</Dialog>
                                                 <Button 
                                                     variant="outline" 
                                                     size="sm" 
@@ -567,41 +695,43 @@ const SalesHistory = () => {
                                                         setDeleteDialogOpen(true);
                                                     }}
                                                 >
-                                                    <Trash2 className="h-4 w-4 mr-1" /> {t('delete')}
+                                                    <Trash2 className="h-4 w-4 mr-1" /> {t('Delete')}
                                                 </Button>
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-3 text-sm mt-3 gap-2">
+                                        <div className="grid grid-cols-2 text-sm mt-3 gap-2">
                                             <div>
-                                                <div className="text-billing-secondary">{t('customer')}</div>
-                                                <div>{sale.customerInfo?.name || t('na')}</div>
+                                                <div className="text-billing-secondary">{t('Customer')}</div>
+                                                <div>{sale.customerName || t('na')}</div>
                                             </div>
                                             <div>
-                                                <div className="text-billing-secondary">{t('phone')}</div>
-                                                <div>{sale.customerInfo?.phone || t('na')}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-billing-secondary">{t('items')}</div>
-                                                <div>{sale.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)}</div>
+                                                <div className="text-billing-secondary">{t('Phone')}</div>
+                                                <div>{sale.customerPhone || t('na')}</div>
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-3 text-sm mt-2 gap-2">
+                                        <div className="grid grid-cols-2 text-sm mt-2 gap-2">
                                             <div>
-                                                <div className="text-billing-secondary">{t('discount')}</div>
-                                                <div className="text-red-500">-{formatCurrency(sale.discountAmount || 0)}</div>
+                                                <div className="text-billing-secondary">{t('Items')}</div>
+                                                <div>{sale.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)}</div>
                                             </div>
                                             <div>
-                                                <div className="text-billing-secondary">{t('payment')}</div>
+                                                <div className="text-billing-secondary">{t('Payment')}</div>
                                                 <div className="capitalize">{sale.paymentMethod}</div>
                                             </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 text-sm mt-2 gap-2">
                                             <div>
-                                                <div className="text-billing-secondary">{t('total')}</div>
+                                                <div className="text-billing-secondary">{t('Status')}</div>
+                                                <div>{getPaymentStatus(sale)}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-billing-secondary">{t('Total')}</div>
                                                 <div className="font-bold text-billing-primary">{formatCurrency(sale.grandTotal)}</div>
                                             </div>
                                         </div>
                                         <div className="mt-2 pt-2 border-t">
                                             <span className="text-sm text-billing-secondary">
-                                                {t('saleId')}: {sale.id?.substring(0, 8)}...
+                                                {t('SaleId')}: {sale.id?.substring(0, 8)}...
                                             </span>
                                         </div>
                                     </div>
@@ -619,18 +749,18 @@ const SalesHistory = () => {
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>{t('confirmDeleteTitle')}</AlertDialogTitle>
+                        <AlertDialogTitle>{t('ConfirmDeleteTitle')}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            {t('confirmDeleteMessage')}
+                            {t('ConfirmDeleteMessage')}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+                        <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
                         <AlertDialogAction 
                             className="bg-red-500 hover:bg-red-600"
                             onClick={handleDeleteSale}
                         >
-                            {t('delete')}
+                            {t('Delete')}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

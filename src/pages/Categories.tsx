@@ -14,7 +14,6 @@ import {
 import { toast } from "@/components/ui/use-toast";
 import { useBilling } from "@/contexts/BillingContext";
 import { auth, database } from "@/firebase/firebaseConfig";
-import PlanModal from "@/pages/PlanModal";
 import CryptoJS from "crypto-js";
 import { getAuth } from "firebase/auth";
 import { get, onValue, push, ref, remove, set } from "firebase/database";
@@ -42,36 +41,7 @@ const Categories = () => {
   const { t } = useTranslation("categories");
   const { categories, addCategory, deleteCategory, products } = useBilling();
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const navigate = useNavigate();
-
-  const checkLimits = async () => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) return true;
-
-    const configRef = ref(database, `users/${user.uid}/businessConfig`);
-    const categoryRef = ref(database, `users/${user.uid}/categories`);
-
-    try {
-      const [configSnap, collectionSnap] = await Promise.all([
-        get(configRef),
-        get(categoryRef)
-      ]);
-
-      const limit = configSnap.val()?.categoryLimit || 5;
-      const currentCount = collectionSnap.exists() ? Object.keys(collectionSnap.val()).length : 0;
-
-      if (currentCount >= limit) {
-        setShowUpgradeDialog(true);
-        return false;
-      }
-      return true;
-    } catch (err) {
-      console.error("Error checking limits:", err);
-      return true;
-    }
-  };
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -134,9 +104,6 @@ const Categories = () => {
       return;
     }
 
-    const canAdd = await checkLimits();
-    if (!canAdd) return;
-
     const categoryRef = ref(database, `users/${user.uid}/categories`);
     const newCategoryRef = push(categoryRef);
     const id = newCategoryRef.key!;
@@ -162,7 +129,11 @@ const Categories = () => {
   };
 
   const getProductCount = (categoryId: string) => {
-    return products.filter(product => product.category === categoryId).length;
+    return products.filter(product => {
+      // Decrypt the category field to get the actual category ID
+      const productCategoryId = decrypt(product.category);
+      return productCategoryId === categoryId;
+    }).length;
   };
 
   const canDeleteCategory = (categoryId: string) => {
@@ -173,23 +144,26 @@ const Categories = () => {
     <Layout>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-billing-dark dark:text-white">
-          {t("categories")}
+          {t("Categories")}
         </h1>
+        <div className="text-sm text-gray-600">
+          {t("Category_count")}: {categories.length}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>{t("all_categories")}</CardTitle>
+              <CardTitle>{t("All_categories")}</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("name")}</TableHead>
-                    <TableHead>{t("products")}</TableHead>
-                    <TableHead className="text-right">{t("actions")}</TableHead>
+                    <TableHead>{t("Name")}</TableHead>
+                    <TableHead>{t("Products")}</TableHead>
+                    <TableHead className="text-right">{t("Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -212,13 +186,13 @@ const Categories = () => {
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>{t("delete_category")}</AlertDialogTitle>
+                                <AlertDialogTitle>{t("Delete_category")}</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  {t("delete_confirm", { name: decrypt(category.name) })}
+                                  {t("Delete_confirm", { name: decrypt(category.name) })}
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+                                <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
                                 <AlertDialogAction
                                   className="bg-billing-danger hover:bg-red-600"
                                   onClick={async () => {
@@ -250,7 +224,7 @@ const Categories = () => {
                                     }
                                   }}
                                 >
-                                  {t("delete_action")}
+                                  {t("Delete_action")}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
@@ -261,7 +235,7 @@ const Categories = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center py-8 text-billing-secondary">
-                        {t("no_categories")}
+                        {t("No_categories")}
                       </TableCell>
                     </TableRow>
                   )}
@@ -274,21 +248,21 @@ const Categories = () => {
         <div>
           <Card>
             <CardHeader>
-              <CardTitle>{t("add_new_category")}</CardTitle>
+              <CardTitle>{t("Add_new_category")}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleAddCategory} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="categoryName">{t("category_name")}</Label>
+                  <Label htmlFor="categoryName">{t("Category_name")}</Label>
                   <Input
                     id="categoryName"
-                    placeholder={t("enter_category_name")}
+                    placeholder={t("Enter_category_name")}
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
                   />
                 </div>
                 <Button type="submit" className="w-full">
-                  <Plus className="mr-2 h-4 w-4" /> {t("add_category")}
+                  <Plus className="mr-2 h-4 w-4" /> {t("Add_category")}
                 </Button>
               </form>
             </CardContent>
@@ -296,21 +270,16 @@ const Categories = () => {
 
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>{t("category_tips")}</CardTitle>
+              <CardTitle>{t("Category_tips")}</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-billing-secondary space-y-2">
-              <p>{t("tips_1")}</p>
-              <p>{t("tips_2")}</p>
-              <p>{t("tips_3")}</p>
+              <p>{t("Tips_1")}</p>
+              <p>{t("Tips_2")}</p>
+              <p>{t("Tips_3")}</p>
             </CardContent>
           </Card>
         </div>
       </div>
-
-      <PlanModal
-        isOpen={showUpgradeDialog}
-        onClose={() => setShowUpgradeDialog(false)}
-      />
     </Layout>
   );
 };

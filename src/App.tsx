@@ -1,66 +1,145 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
+// App.tsx
+import { Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Routes, Route, Navigate } from "react-router-dom";
+
+// Providers & Context
 import { BillingProvider } from "@/contexts/BillingContext";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+// UI Notifications
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 
 // Pages
-import Dashboard from "@/pages/Dashboard";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import VerifyEmail from "@/pages/VerifyEmail";
+import NotFound from "@/pages/NotFound";
 import BusinessSetup from "@/pages/BusinessSetup";
+import Dashboard from "@/pages/Dashboard";
 import PointOfSale from "@/pages/PointOfSale";
 import Products from "@/pages/Products";
 import ProductForm from "@/pages/ProductForm";
 import Categories from "@/pages/Categories";
 import SalesHistory from "@/pages/SalesHistory";
 import Settings from "@/pages/Settings";
-import NotFound from "@/pages/NotFound";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import AdminManagement from "./pages/AdminManagement";
-import WelcomePage from "./pages/Welcome";
-import VerifyEmail from "./pages/VerifyEmail";
+import AdminManagement from "@/pages/AdminManagement";
 
-// 🔐 ProtectedRoute
-import ProtectedRoute from "./components/ProtectedRoute";
+// Components
+import ProtectedRoute from "@/components/ProtectedRoute";
+import ChatBot from "@/pages/Chatbot"; // ✅ Floating movable chatbot
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <BillingProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner position="top-right" />
-        <Routes>
-          <Route path="/" element={<Navigate to="/welcome" replace />} />
-          <Route path="/welcome" element={<WelcomePage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route
-            path="/setup"
-            element={
-              <ProtectedRoute>
-                <BusinessSetup />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/pos" element={<PointOfSale />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/products/add" element={<ProductForm />} />
-          <Route path="/products/edit/:productId" element={<ProductForm />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/sales" element={<SalesHistory />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<NotFound />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/adminmanagement" element={<AdminManagement />} />
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BillingProvider>
+        <TooltipProvider>
+          {/* Global UI components */}
+          <Toaster />
+          <Sonner position="top-right" />
 
-        </Routes>
-      </TooltipProvider>
-    </BillingProvider>
-  </QueryClientProvider>
-);
+          {/* Application Routes */}
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<Login />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+
+            {/* Protected Routes */}
+            <Route
+              path="/setup"
+              element={
+                <ProtectedRoute>
+                  <BusinessSetup />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pos"
+              element={
+                <ProtectedRoute>
+                  <PointOfSale />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products"
+              element={
+                <ProtectedRoute>
+                  <Products />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products/add"
+              element={
+                <ProtectedRoute>
+                  <ProductForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products/edit/:productId"
+              element={
+                <ProtectedRoute>
+                  <ProductForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/categories"
+              element={
+                <ProtectedRoute>
+                  <Categories />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sales"
+              element={
+                <ProtectedRoute>
+                  <SalesHistory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/adminmanagement"
+              element={
+                <ProtectedRoute>
+                  <AdminManagement />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Catch-all route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+
+          {/* ✅ Floating movable ChatBot visible globally */}
+          <ChatBot />
+        </TooltipProvider>
+      </BillingProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

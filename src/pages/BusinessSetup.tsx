@@ -6,8 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/components/ui/sonner";
 import { useBilling } from "@/contexts/BillingContext";
 import CryptoJS from "crypto-js";
-import { ref, update } from "firebase/database";
-import React from "react";
+import { ref, update, get } from "firebase/database";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, database } from "../firebase/firebaseConfig";
 
@@ -24,13 +24,43 @@ const BusinessSetup = () => {
   const [isOtherType, setIsOtherType] = React.useState(
     businessConfig?.type === "other"
   );
+  const [userData, setUserData] = useState<any>(null);
+
+  // Fetch user data from Firebase on component mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const userRef = ref(database, `users/${user.uid}`);
+          const snapshot = await get(userRef);
+          
+          if (snapshot.exists()) {
+            const userData = snapshot.val();
+            setUserData(userData);
+            
+            // Pre-fill form with user data
+            setFormState(prev => ({
+              ...prev,
+              email: userData.email || "",
+              phone: userData.mobileNumber || "",
+            }));
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+        }
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   const [formState, setFormState] = React.useState({
     name: businessConfig?.name || "",
     type: businessConfig?.type || "",
     address: businessConfig?.address || "",
-    phone: businessConfig?.phone || "",
-    email: businessConfig?.email || "",
+    phone: "", // Will be populated from user data
+    email: "", // Will be populated from user data
     taxRate: businessConfig?.taxRate || 0,
     logo: businessConfig?.logo || "",
     gstNumber: businessConfig?.gstNumber || "",
@@ -38,6 +68,12 @@ const BusinessSetup = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    
+    // Prevent changing email and phone if they come from registration
+    if ((name === "email" && userData?.email) || (name === "phone" && userData?.mobileNumber)) {
+      return;
+    }
+    
     setFormState(prev => ({
       ...prev,
       [name]: name === "taxRate" ? parseFloat(value) || 0 : value,
@@ -193,6 +229,8 @@ const BusinessSetup = () => {
                     required
                   />
                 </div>
+                
+                {/* Phone Number (from registration, not changeable) */}
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number *</Label>
                   <Input
@@ -203,20 +241,36 @@ const BusinessSetup = () => {
                     onChange={handleChange}
                     required
                     inputMode="tel"
+                    readOnly={!!userData?.mobileNumber}
+                    className={userData?.mobileNumber ? "bg-gray-100 cursor-not-allowed" : ""}
                   />
+                  {userData?.mobileNumber && (
+                    <p className="text-xs text-gray-500">
+                      Phone number from registration (cannot be changed)
+                    </p>
+                  )}
                 </div>
 
+                {/* Email (from registration, not changeable) */}
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="your@business.com"
-                    value={formState.email}
-                    onChange={handleChange}
-                  />
-                </div>
+  <Label htmlFor="email" className="dark:text-white">Email Address</Label>
+  <Input
+    id="email"
+    name="email"
+    type="email"
+    placeholder="your@business.com"
+    value={formState.email}
+    onChange={handleChange}
+    readOnly={!!userData?.email}
+    className={userData?.email ? "bg-gray-100 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300" : ""}
+  />
+  {userData?.email && (
+    <p className="text-xs text-gray-500 dark:text-gray-400">
+      Email from registration (cannot be changed)
+    </p>
+  )}
+</div>
+                
                 <div className="space-y-2">
                   <Label htmlFor="taxRate">Tax Rate (%)</Label>
                   <Input

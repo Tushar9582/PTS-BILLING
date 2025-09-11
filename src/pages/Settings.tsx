@@ -22,22 +22,47 @@ const encryptField = (val: any) => CryptoJS.AES.encrypt(val.toString(), SECRET_K
 
 const decryptField = (cipherText: string) => {
   try {
+    // Check if the text looks like encrypted data (contains non-printable characters or is base64-like)
+    if (!cipherText || typeof cipherText !== 'string' || cipherText.trim() === '') {
+      return cipherText;
+    }
+    
+    // Check if it might already be decrypted (contains only printable characters)
+    if (/^[A-Za-z0-9\s.,@\-_]+$/.test(cipherText)) {
+      return cipherText;
+    }
+    
     const bytes = CryptoJS.AES.decrypt(cipherText, SECRET_KEY);
-    return bytes.toString(CryptoJS.enc.Utf8);
+    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+    
+    // If decryption resulted in empty string, return original
+    if (!decrypted) {
+      return cipherText;
+    }
+    
+    return decrypted;
   } catch (err) {
-    console.error("Decryption error:", err);
-    return cipherText;
+    console.error("Decryption error:", err, "for value:", cipherText);
+    return cipherText; // Return original value if decryption fails
   }
 };
 
 const decryptNumberField = (cipherText: string, defaultValue = 10) => {
   try {
-    const bytes = CryptoJS.AES.decrypt(cipherText, SECRET_KEY);
-    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-    const num = parseFloat(decrypted);
+    // First try to decrypt if it's encrypted
+    const decryptedText = decryptField(cipherText);
+    
+    // If decryption returned the original text, try to parse it directly
+    if (decryptedText === cipherText) {
+      const num = parseFloat(cipherText);
+      return isNaN(num) ? defaultValue : num;
+    }
+    
+    // Otherwise, parse the decrypted text
+    const num = parseFloat(decryptedText);
     return isNaN(num) ? defaultValue : num;
   } catch (err) {
-    console.error("Decryption error:", err);
+    console.error("Number decryption error:", err);
     return defaultValue;
   }
 };
@@ -118,20 +143,20 @@ const Settings = () => {
       if (!user) return;
 
       try {
-        const snapshot = await get(ref(database, `users/${user.uid}/business`));
+        const snapshot = await get(ref(database, `users/${user.uid}/businessConfig`));
         if (snapshot.exists()) {
           const data = snapshot.val();
 
           const decrypted = {
-            name: decryptField(data.name),
-            type: decryptField(data.type),
-            address: decryptField(data.address),
-            phone: decryptField(data.phone),
+            name: data.name ? decryptField(data.name) : "",
+            type: data.type ? decryptField(data.type) : "",
+            address: data.address ? decryptField(data.address) : "",
+            phone: data.phone ? decryptField(data.phone) : "",
             countryCode: data.countryCode ? decryptField(data.countryCode) : "+91",
-            email: userEmail || decryptField(data.email), // Use authenticated user's email
-            taxRate: decryptNumberField(data.taxRate, 10),
-            logo: decryptField(data.logo),
-            gstNumber: decryptField(data.gstNumber),
+            email: userEmail || (data.email ? decryptField(data.email) : ""),
+            taxRate: data.taxRate ? decryptNumberField(data.taxRate, 10) : 10,
+            logo: data.logo ? decryptField(data.logo) : "",
+            gstNumber: data.gstNumber ? decryptField(data.gstNumber) : "",
           };
 
           setFormState(decrypted);

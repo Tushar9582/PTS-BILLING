@@ -51,9 +51,28 @@ interface LayoutProps {
 
 const SECRET_KEY = import.meta.env.VITE_ENCRYPTION_KEY || "your-very-secure-secret-key";
 
+// Helper function to check if a string is encrypted
+const isEncrypted = (str: string): boolean => {
+  if (!str || typeof str !== 'string') return false;
+  
+  // Encrypted strings are typically base64 encoded and have a specific pattern
+  // This is a simple check - you might need to adjust based on your encryption pattern
+  try {
+    return str.includes('U2FsdGVkX1') || // Common CryptoJS prefix
+           (str.length % 4 === 0 && /^[A-Za-z0-9+/=]+$/.test(str));
+  } catch (err) {
+    return false;
+  }
+};
+
 const decryptField = (encrypted: string): string => {
   if (!encrypted || typeof encrypted !== 'string') {
     return encrypted || '';
+  }
+
+  // If it doesn't appear to be encrypted, return as-is
+  if (!isEncrypted(encrypted)) {
+    return encrypted;
   }
 
   try {
@@ -105,6 +124,16 @@ const featureCards = [
     description: "Works perfectly on all devices from desktop to mobile"
   }
 ];
+
+// Safe translation function with fallback
+const safeT = (t: (key: string, fallback: string) => string, key: string, fallback: string): string => {
+  try {
+    return t(key, fallback);
+  } catch (error) {
+    console.warn(`Translation error for key "${key}":`, error);
+    return fallback;
+  }
+};
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { isConfigured, businessConfig } = useBilling();
@@ -195,13 +224,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Get page title based on current route
   const getPageTitle = () => {
     const route = location.pathname;
-    if (route === "/dashboard") return t('Dashboard');
-    if (route === "/pos") return t('Point Of Sale');
-    if (route === "/products") return t('Products');
-    if (route === "/products/add") return t('Add Product');
-    if (route === "/categories") return t('Categories');
-    if (route === "/sales") return t('Sales History');
-    if (route === "/settings") return t('Settings');
+    if (route === "/dashboard") return safeT(t, 'dashboard', 'Dashboard');
+    if (route === "/pos") return safeT(t, 'point_of_sale', 'Point Of Sale');
+    if (route === "/products") return safeT(t, 'products', 'Products');
+    if (route === "/products/add") return safeT(t, 'add_product', 'Add Product');
+    if (route === "/categories") return safeT(t, 'categories', 'Categories');
+    if (route === "/sales") return safeT(t, 'sales_history', 'Sales History');
+    if (route === "/settings") return safeT(t, 'settings', 'Settings');
     return "QuickBill";
   };
   
@@ -222,7 +251,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               className="inline-flex items-center text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
             >
               <LogOut className="w-5 h-5 mr-1" />
-              {t('Logout')}
+              {safeT(t, 'logout', 'Logout')}
             </button>
           </motion.div>
 
@@ -233,11 +262,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             className="text-center mb-8 md:mb-12"
           >
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-800 dark:text-white mb-3 md:mb-4">
-              {t('Welcome_to')} <span className="text-blue-600 dark:text-blue-400">QuickBill</span>
+              {safeT(t, 'welcome_to', 'Welcome to')} <span className="text-blue-600 dark:text-blue-400">QuickBill</span>
             </h1>
             <h2 className="mb-5 mt-5 font-bold text-xl">by PTS</h2>
             <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto px-2">
-              {t('Welcome_description')}
+              {safeT(t, 'welcome_description', 'Streamline your business operations with our easy-to-use billing and inventory management system')}
             </p>
           </motion.div>
   
@@ -252,10 +281,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-full mr-3">
                   <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{t('Feature_1_title')}</h3>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{safeT(t, 'feature_1_title', 'Lightning Fast Billing')}</h3>
               </div>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                {t('Feature_1_description')}
+                {safeT(t, 'feature_1_description', 'Process transactions quickly with our optimized billing interface')}
               </p>
             </motion.div>
   
@@ -269,10 +298,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="bg-purple-100 dark:bg-purple-900/50 p-2 rounded-full mr-3">
                   <BarChart2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{t('Feature_2_title')}</h3>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{safeT(t, 'feature_2_title', 'Smart Analytics')}</h3>
               </div>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                {t('Feature_2_description')}
+                {safeT(t, 'feature_2_description', 'Gain valuable insights into your business performance with detailed reports')}
               </p>
             </motion.div>
   
@@ -286,10 +315,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="bg-green-100 dark:bg-green-900/50 p-2 rounded-full mr-3">
                   <Settings className="w-5 h-5 text-green-600 dark:text-green-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{t('feature_3_title')}</h3>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{safeT(t, 'feature_3_title', 'Easy Setup')}</h3>
               </div>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                {t('Feature_3_description')}
+                {safeT(t, 'feature_3_description', 'Get started in minutes with our intuitive setup process')}
               </p>
             </motion.div>
           </div>
@@ -301,13 +330,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             className="bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 rounded-xl md:rounded-2xl p-6 mb-8 md:mb-10 shadow-lg overflow-hidden relative mx-2"
           >
             <div className="relative z-10">
-              <div className="flex flex-col lg:flex-Row items-center">
+              <div className="flex flex-col lg:flex-row items-center">
                 <div className="w-full lg:w-1/2 mb-6 lg:mb-0 lg:pr-6">
                   <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
-                    {t('Feature_showcase_title')}
+                    {safeT(t, 'feature_showcase_title', 'Everything You Need')}
                   </h2>
                   <p className="text-blue-100 mb-4 text-sm md:text-base">
-                    {t('Feature_showcase_description')}
+                    {safeT(t, 'feature_showcase_description', 'QuickBill provides all the tools you need to run your business efficiently')}
                   </p>
                   <div className="flex space-x-2">
                     {featureCards.map((_, index) => (
@@ -334,10 +363,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         {featureCards[currentFeature].icon}
                       </div>
                       <h3 className="text-lg md:text-xl font-semibold text-white mb-1">
-                        {t(featureCards[currentFeature].title.toLowerCase().replace(' ', '_'))}
+                        {safeT(t, featureCards[currentFeature].title.toLowerCase().replace(/[ -]/g, '_'), featureCards[currentFeature].title)}
                       </h3>
                       <p className="text-blue-100 text-sm md:text-base px-2">
-                        {t(featureCards[currentFeature].description.toLowerCase().replace(/[ ,]/g, '_'))}
+                        {safeT(t, featureCards[currentFeature].description.toLowerCase().replace(/[ ,]/g, '_'), featureCards[currentFeature].description)}
                       </p>
                     </motion.div>
                   </AnimatePresence>
@@ -356,13 +385,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               to="/setup"
               className="inline-flex items-center justify-center px-6 py-3 sm:px-8 sm:py-3 text-base sm:text-lg font-medium text-white bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 rounded-full shadow-lg transition-all transform hover:scale-[1.02]"
             >
-              {t('start_setup_button')}
+              {safeT(t, 'start_setup_button', 'Start Setup')}
               <svg className="w-4 h-4 sm:w-5 sm:h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
             </NavLink>
             <p className="mt-3 text-sm sm:text-base text-gray-500 dark:text-gray-400">
-              {t('no_credit_card_required')}
+              {safeT(t, 'no_credit_card_required', 'No credit card required')}
             </p>
           </motion.div>
         </div>
@@ -388,49 +417,49 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Define navItems inside the component to get fresh translations
   const navItems = [
     {
-      name: t('Dashboard'),
+      name: safeT(t, 'dashboard', 'Dashboard'),
       path: "/dashboard",
       icon: <LayoutDashboard size={20} />,
       mobileIcon: <Home size={24} />,
       showWhen: isConfigured,
     },
     {
-      name: t('Point Of Sale'),
+      name: safeT(t, 'point_of_sale', 'Point Of Sale'),
       path: "/pos",
       icon: <ShoppingCart size={20} />,
       mobileIcon: <ShoppingCart size={24} />,
       showWhen: isConfigured,
     },
     {
-      name: t('Products'),
+      name: safeT(t, 'products', 'Products'),
       path: "/products",
       icon: <Package size={20} />,
       mobileIcon: <Tag size={24} />,
       showWhen: isConfigured,
     },
     {
-      name: t('Add Product'),
+      name: safeT(t, 'add_product', 'Add Product'),
       path: "/products/add",
       icon: <Plus size={20} />,
       mobileIcon: <Plus size={24} />,
       showWhen: isConfigured,
     },
     {
-      name: t('Categories'),
+      name: safeT(t, 'categories', 'Categories'),
       path: "/categories",
       icon: <List size={20} />,
       mobileIcon: <List size={24} />,
       showWhen: isConfigured,
     },
     {
-      name: t('Sales History'),
+      name: safeT(t, 'sales_history', 'Sales History'),
       path: "/sales",
       icon: <FileText size={20} />,
       mobileIcon: <PieChart size={24} />,
       showWhen: isConfigured,
     },
     {
-      name: t('Settings'),
+      name: safeT(t, 'settings', 'Settings'),
       path: "/settings",
       icon: <Settings size={20} />,
       mobileIcon: <Settings size={24} />,
@@ -463,7 +492,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div>
             <h2 className="text-base font-medium dark:text-white truncate">{decryptedBusinessConfig.name}</h2>
             <p className="text-xs text-billing-secondary dark:text-gray-400 capitalize truncate">
-              {decryptedBusinessConfig.type || t('business')}
+              {decryptedBusinessConfig.type || safeT(t, 'business', 'business')}
             </p>
           </div>
         </div>
@@ -498,7 +527,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               onClick={handleLogout}
               className="bg-red-600 text-white px-6 py-1 text-sm rounded shadow hover:bg-red-700 transition duration-200"
             >
-              {t('Logout')}
+              {safeT(t, 'logout', 'Logout')}
             </Button>
           </div>
         </div>

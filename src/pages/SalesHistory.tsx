@@ -66,6 +66,17 @@ const decryptField = (encrypted: string): string => {
 
 // Safe number decryption with fallback
 const decryptNumberField = (encrypted: string, defaultValue = 0): number => {
+    if (!encrypted) return defaultValue;
+    
+    // If it's already a number, return it
+    if (typeof encrypted === 'number') return encrypted;
+    
+    // If it's a string that looks like a number, parse it
+    if (typeof encrypted === 'string' && !isNaN(parseFloat(encrypted))) {
+        return parseFloat(encrypted);
+    }
+    
+    // Otherwise try to decrypt
     const decrypted = decryptField(encrypted);
     const num = parseFloat(decrypted);
     return isNaN(num) ? defaultValue : num;
@@ -87,13 +98,13 @@ const decryptSaleData = (sale: any) => {
             ...item,
             id: decryptField(item.id),
             name: decryptField(item.name),
-            price: decryptNumberField(item.price.toString()),
+            price: decryptNumberField(item.price?.toString(), 0),
             quantity: item.quantity // Quantity is not sensitive
         })) || [],
-        subtotal: decryptNumberField(sale.subtotal.toString()),
-        tax: decryptNumberField(sale.tax?.toString() || '0'),
-        discountAmount: decryptNumberField(sale.discountAmount?.toString() || '0'),
-        grandTotal: decryptNumberField(sale.grandTotal.toString()),
+        subtotal: decryptNumberField(sale.subtotal?.toString(), 0),
+        tax: decryptNumberField(sale.tax?.toString(), 0),
+        discountAmount: decryptNumberField(sale.discountAmount?.toString(), 0),
+        grandTotal: decryptNumberField(sale.grandTotal?.toString(), 0),
         customerInfo: sale.customerInfo ? {
             name: decryptField(sale.customerInfo.name || ''),
             phone: decryptField(sale.customerInfo.phone || ''),
@@ -111,9 +122,13 @@ const decryptSaleData = (sale: any) => {
     };
 };
 
-const SalesHistory = () => {
+interface SalesHistoryProps {
+  refreshSales: () => Promise<void>;
+}
+
+const SalesHistory: React.FC<SalesHistoryProps> = ({ refreshSales }) => {
     const { t } = useTranslation("sale history");
-    const { sales: contextSales, isLoading, refreshSales } = useBilling();
+    const { sales: contextSales, isLoading } = useBilling();
     const [sales, setSales] = useState(contextSales.map(decryptSaleData));
     const [searchQuery, setSearchQuery] = useState("");
     const [dateFilter, setDateFilter] = useState("");

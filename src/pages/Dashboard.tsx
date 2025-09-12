@@ -549,26 +549,7 @@ const Dashboard = () => {
                 {t('Todays_revenue')}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-xl md:text-2xl font-bold dark:text-white">
-                  {formatCurrency(todayRevenue)}
-                </div>
-                <div className="flex items-center gap-1 text-xs">
-                  {revenueTrend > 0 ? (
-                    <TrendingUp className="h-4 w-4 text-green-500" />
-                  ) : revenueTrend < 0 ? (
-                    <TrendingDown className="h-4 w-4 text-red-500" />
-                  ) : (
-                    <span className="h-4 w-4" />
-                  )}
-                  <span className={revenueTrend > 0 ? "text-green-500" : revenueTrend < 0 ? "text-red-500" : ""}>
-                    {revenueTrend !== 0 ? `${Math.abs(revenueTrend).toFixed(1)}%` : ""}
-                  </span>
-                </div>
-              </div>
-              {getBusinessAnimation()}
-            </CardContent>
+             
           </Card>
 
           <Card className="bg-white dark:bg-gray-800 dark:text-white relative overflow-hidden animate-fade-in" style={{ animationDelay: "0.1s" }}>

@@ -20,7 +20,7 @@ export interface CartItem extends Product {
 }
 
 export interface Category {
-  description: string;
+  description?: string;
   id: string;
   name: string;
 }
@@ -94,13 +94,13 @@ const BillingContext = createContext<BillingContextType | undefined>(undefined);
 
 // Helper functions for local storage
 const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
-  if (typeof window === 'undefined') return defaultValue;
+  if (typeof window === "undefined") return defaultValue;
   const saved = localStorage.getItem(key);
   return saved ? JSON.parse(saved) : defaultValue;
 };
 
 const saveToLocalStorage = <T,>(key: string, value: T) => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     localStorage.setItem(key, JSON.stringify(value));
   }
 };
@@ -110,7 +110,7 @@ const initializeUserData = async (userId: string) => {
   try {
     const userRef = ref(database, `users/${userId}`);
     const snapshot = await get(userRef);
-    
+
     if (!snapshot.exists()) {
       await set(userRef, {
         products: {},
@@ -124,13 +124,23 @@ const initializeUserData = async (userId: string) => {
   }
 };
 
-export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(loadFromLocalStorage('billing_products', []));
-  const [categories, setCategories] = useState<Category[]>(loadFromLocalStorage('billing_categories', []));
-  const [cart, setCart] = useState<CartItem[]>(loadFromLocalStorage('billing_cart', []));
-  const [sales, setSales] = useState<Sale[]>(loadFromLocalStorage('billing_sales', []));
+export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [products, setProducts] = useState<Product[]>(
+    loadFromLocalStorage("billing_products", [])
+  );
+  const [categories, setCategories] = useState<Category[]>(
+    loadFromLocalStorage("billing_categories", [])
+  );
+  const [cart, setCart] = useState<CartItem[]>(
+    loadFromLocalStorage("billing_cart", [])
+  );
+  const [sales, setSales] = useState<Sale[]>(
+    loadFromLocalStorage("billing_sales", [])
+  );
   const [businessConfig, setBusinessConfig] = useState<BusinessConfig | null>(
-    loadFromLocalStorage('billing_business_config', null)
+    loadFromLocalStorage("billing_business_config", null)
   );
   const [uid, setUid] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -148,10 +158,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // User signed out, clear Firebase listeners and use local storage
         clearFirebaseListeners();
         setUid(null);
-        setProducts(loadFromLocalStorage('billing_products', []));
-        setCategories(loadFromLocalStorage('billing_categories', []));
-        setSales(loadFromLocalStorage('billing_sales', []));
-        setBusinessConfig(loadFromLocalStorage('billing_business_config', null));
+        setProducts(loadFromLocalStorage("billing_products", []));
+        setCategories(loadFromLocalStorage("billing_categories", []));
+        setSales(loadFromLocalStorage("billing_sales", []));
+        setBusinessConfig(loadFromLocalStorage("billing_business_config", null));
       }
       setIsLoading(false);
     });
@@ -176,10 +186,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (data) {
         const loadedProducts = Object.values(data) as Product[];
         setProducts(loadedProducts);
-        saveToLocalStorage('billing_products', loadedProducts);
+        saveToLocalStorage("billing_products", loadedProducts);
       } else {
         setProducts([]);
-        saveToLocalStorage('billing_products', []);
+        saveToLocalStorage("billing_products", []);
       }
     });
 
@@ -190,10 +200,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (data) {
         const loadedCategories = Object.values(data) as Category[];
         setCategories(loadedCategories);
-        saveToLocalStorage('billing_categories', loadedCategories);
+        saveToLocalStorage("billing_categories", loadedCategories);
       } else {
         setCategories([]);
-        saveToLocalStorage('billing_categories', []);
+        saveToLocalStorage("billing_categories", []);
       }
     });
 
@@ -204,13 +214,13 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (data) {
         const loadedSales = Object.entries(data).map(([id, saleData]) => ({
           id,
-          ...(saleData as Omit<Sale, 'id'>)
+          ...(saleData as Omit<Sale, "id">),
         }));
         setSales(loadedSales);
-        saveToLocalStorage('billing_sales', loadedSales);
+        saveToLocalStorage("billing_sales", loadedSales);
       } else {
         setSales([]);
-        saveToLocalStorage('billing_sales', []);
+        saveToLocalStorage("billing_sales", []);
       }
     });
 
@@ -220,10 +230,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const data = snapshot.val();
       if (data) {
         setBusinessConfig(data);
-        saveToLocalStorage('billing_business_config', data);
+        saveToLocalStorage("billing_business_config", data);
       } else {
         setBusinessConfig(null);
-        saveToLocalStorage('billing_business_config', null);
+        saveToLocalStorage("billing_business_config", null);
       }
     });
   };
@@ -237,7 +247,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Cart is always local (not synced to Firebase)
   useEffect(() => {
-    saveToLocalStorage('billing_cart', cart);
+    saveToLocalStorage("billing_cart", cart);
   }, [cart]);
 
   const isConfigured = !!businessConfig;
@@ -251,7 +261,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       } else {
         // Offline/local mode
         setProducts([...products, product]);
-        saveToLocalStorage('billing_products', [...products, product]);
+        saveToLocalStorage("billing_products", [...products, product]);
       }
       toast.success("Product added successfully");
     } catch (error) {
@@ -267,11 +277,11 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await update(productRef, updatedFields);
       } else {
         // Offline/local mode
-        const updatedProducts = products.map(product => 
+        const updatedProducts = products.map((product) =>
           product.id === id ? { ...product, ...updatedFields } : product
         );
         setProducts(updatedProducts);
-        saveToLocalStorage('billing_products', updatedProducts);
+        saveToLocalStorage("billing_products", updatedProducts);
       }
       toast.success("Product updated successfully");
     } catch (error) {
@@ -287,9 +297,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await remove(productRef);
       } else {
         // Offline/local mode
-        const updatedProducts = products.filter(product => product.id !== id);
+        const updatedProducts = products.filter((product) => product.id !== id);
         setProducts(updatedProducts);
-        saveToLocalStorage('billing_products', updatedProducts);
+        saveToLocalStorage("billing_products", updatedProducts);
       }
       toast.success("Product deleted successfully");
     } catch (error) {
@@ -313,7 +323,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Offline/local mode
         const updatedCategories = [...categories, newCategory];
         setCategories(updatedCategories);
-        saveToLocalStorage('billing_categories', updatedCategories);
+        saveToLocalStorage("billing_categories", updatedCategories);
       }
       toast.success("Category added successfully");
     } catch (error) {
@@ -329,11 +339,11 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await update(categoryRef, { name });
       } else {
         // Offline/local mode
-        const updatedCategories = categories.map(category => 
+        const updatedCategories = categories.map((category) =>
           category.id === id ? { ...category, name } : category
         );
         setCategories(updatedCategories);
-        saveToLocalStorage('billing_categories', updatedCategories);
+        saveToLocalStorage("billing_categories", updatedCategories);
       }
       toast.success("Category updated successfully");
     } catch (error) {
@@ -349,9 +359,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await remove(categoryRef);
       } else {
         // Offline/local mode
-        const updatedCategories = categories.filter(category => category.id !== id);
+        const updatedCategories = categories.filter((category) => category.id !== id);
         setCategories(updatedCategories);
-        saveToLocalStorage('billing_categories', updatedCategories);
+        saveToLocalStorage("billing_categories", updatedCategories);
       }
       toast.success("Category deleted successfully");
     } catch (error) {
@@ -366,7 +376,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (existingItem) {
       setCart(
         cart.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
         )
       );
     } else {
@@ -380,7 +392,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       removeFromCart(id);
       return;
     }
-    setCart(cart.map((item) => (item.id === id ? { ...item, quantity } : item)));
+    setCart(
+      cart.map((item) => (item.id === id ? { ...item, quantity } : item))
+    );
   };
 
   const removeFromCart = (id: string) => {
@@ -421,7 +435,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       customerInfo: saleData.customerInfo,
       customer: undefined,
       customerName: undefined,
-      customerPhone: undefined
+      customerPhone: undefined,
     };
 
     try {
@@ -431,7 +445,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       } else {
         const updatedSales = [newSale, ...sales];
         setSales(updatedSales);
-        saveToLocalStorage('billing_sales', updatedSales);
+        saveToLocalStorage("billing_sales", updatedSales);
       }
 
       clearCart();
@@ -442,16 +456,27 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Business configuration
+  // ✅ Business configuration (updated with sanitization)
   const configBusiness = async (config: BusinessConfig) => {
     try {
+      const safeConfig: BusinessConfig = {
+        upiId: config.upiId ?? "",
+        name: config.name ?? "",
+        type: config.type ?? "",
+        address: config.address ?? "",
+        phone: config.phone ?? "",
+        email: config.email ?? "",
+        taxRate: config.taxRate ?? 0,
+        logo: config.logo ?? "",
+        gstNumber: config.gstNumber ?? "",
+      };
+
       if (uid) {
         const configRef = ref(database, `users/${uid}/businessConfig`);
-        await set(configRef, config);
+        await set(configRef, safeConfig);
       } else {
-        // Offline/local mode
-        setBusinessConfig(config);
-        saveToLocalStorage('billing_business_config', config);
+        setBusinessConfig(safeConfig);
+        saveToLocalStorage("billing_business_config", safeConfig);
       }
       toast.success("Business configuration saved");
     } catch (error) {
@@ -482,7 +507,11 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setBusinessConfig: configBusiness,
   };
 
-  return <BillingContext.Provider value={value}>{children}</BillingContext.Provider>;
+  return (
+    <BillingContext.Provider value={value}>
+      {children}
+    </BillingContext.Provider>
+  );
 };
 
 export const useBilling = () => {
@@ -491,4 +520,4 @@ export const useBilling = () => {
     throw new Error("useBilling must be used within a BillingProvider");
   }
   return context;
-};  
+};

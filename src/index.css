@@ -136,7 +136,13 @@
 .neumorphic-button:hover {
   box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.1), -3px -3px 6px rgba(255, 255, 255, 0.8);
 }
-
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
 
 .dark .neumorphic-button {
   background-color: #2a2a2a;

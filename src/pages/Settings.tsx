@@ -1,799 +1,571 @@
-import React, { useEffect, useState } from "react";
-import { useBilling } from "@/contexts/BillingContext";
+import AppearanceSettings from "@/components/AppearanceSettings";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { 
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
-} from "@/components/ui/table";
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger 
-} from "@/components/ui/dialog";
-import { formatCurrency, formatDate, formatTime } from "@/lib/utils";
-import { Search, FileText, Calendar, Download, Trash2 } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { Skeleton } from "@/components/ui/skeleton";
-import { auth, database } from "@/firebase/firebaseConfig";
-import { onValue, ref, remove, update } from "firebase/database";
-import { useNavigate } from "react-router-dom";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/use-toast";
-import * as XLSX from 'xlsx';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useTranslation } from "react-i18next";
+import { useBilling } from "@/contexts/BillingContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { auth, database } from "@/firebase/firebaseConfig";
 import CryptoJS from "crypto-js";
-import { format } from "date-fns";
+import { get, ref, update } from "firebase/database";
+import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
-const SECRET_KEY = import.meta.env.VITE_ENCRYPTION_KEY || "your-very-secure-secret-key";
+const SECRET_KEY = "your-very-secure-secret-key";
 
-// Encryption function
-const encryptField = (value: string): string => {
-    if (!value) return value;
-    return CryptoJS.AES.encrypt(value, SECRET_KEY).toString();
+const encryptField = (val: any) => CryptoJS.AES.encrypt(val.toString(), SECRET_KEY).toString();
+
+const decryptField = (cipherText: string) => {
+  try {
+    // Check if the text looks like encrypted data (contains non-printable characters or is base64-like)
+    if (!cipherText || typeof cipherText !== 'string' || cipherText.trim() === '') {
+      return cipherText;
+    }
+    
+    // Check if it might already be decrypted (contains only printable characters)
+    if (/^[A-Za-z0-9\s.,@\-_]+$/.test(cipherText)) {
+      return cipherText;
+    }
+    
+    const bytes = CryptoJS.AES.decrypt(cipherText, SECRET_KEY);
+    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+    
+    // If decryption resulted in empty string, return original
+    if (!decrypted) {
+      return cipherText;
+    }
+    
+    return decrypted;
+  } catch (err) {
+    console.error("Decryption error:", err, "for value:", cipherText);
+    return cipherText; // Return original value if decryption fails
+  }
 };
 
-// Decryption function - only decrypt if it looks like encrypted data
-const decryptField = (encrypted: string): string => {
-    if (!encrypted || typeof encrypted !== 'string') {
-        return encrypted || '';
+const decryptNumberField = (cipherText: string, defaultValue = 10) => {
+  try {
+    // First try to decrypt if it's encrypted
+    const decryptedText = decryptField(cipherText);
+    
+    // If decryption returned the original text, try to parse it directly
+    if (decryptedText === cipherText) {
+      const num = parseFloat(cipherText);
+      return isNaN(num) ? defaultValue : num;
+    }
+    
+    // Otherwise, parse the decrypted text
+    const num = parseFloat(decryptedText);
+    return isNaN(num) ? defaultValue : num;
+  } catch (err) {
+    console.error("Number decryption error:", err);
+    return defaultValue;
+  }
+};
+
+interface FormState {
+  name: string;
+  type: string;
+  address: string;
+  phone: string;
+  countryCode: string;
+  email: string;
+  taxRate: number;
+  logo: string;
+  gstNumber: string;
+}
+
+const Settings = () => {
+  const { t, i18n } = useTranslation("setting");
+  const { businessConfig, setBusinessConfig } = useBilling();
+  const { buttonStyle } = useTheme();
+  const navigate = useNavigate();
+
+  const [isUploading, setIsUploading] = useState(false);
+  const [isOtherType, setIsOtherType] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [userEmail, setUserEmail] = useState(""); // Store the authenticated user's email
+
+  const [formState, setFormState] = useState<FormState>({
+    name: "",
+    type: "cafe",
+    address: "",
+    phone: "",
+    countryCode: "+91",
+    email: "",
+    taxRate: 10,
+    logo: "",
+    gstNumber: "",
+  });
+
+  const countryCodes = [
+    { code: "+91", country: "India" },
+    { code: "+1", country: "USA/Canada" },
+    { code: "+44", country: "UK" },
+    { code: "+61", country: "Australia" },
+    { code: "+971", country: "UAE" },
+    { code: "+65", country: "Singapore" },
+    { code: "+60", country: "Malaysia" },
+    { code: "+86", country: "China" },
+    { code: "+81", country: "Japan" },
+    { code: "+82", country: "South Korea" },
+  ];
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem("language", lng);
+  };
+
+  useEffect(() => {
+    const savedLanguage = localStorage.getItem("language");
+    if (savedLanguage) {
+      i18n.changeLanguage(savedLanguage);
+    }
+  }, [i18n]);
+
+  useEffect(() => {
+    // Get the authenticated user's email
+    const user = auth.currentUser;
+    if (user && user.email) {
+      setUserEmail(user.email);
+      // Set the email in form state
+      setFormState(prev => ({ ...prev, email: user.email || "" }));
+    }
+  }, []);
+
+  useEffect(() => {
+    const loadDecryptedData = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      try {
+        const snapshot = await get(ref(database, `users/${user.uid}/businessConfig`));
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+
+          const decrypted = {
+            name: data.name ? decryptField(data.name) : "",
+            type: data.type ? decryptField(data.type) : "",
+            address: data.address ? decryptField(data.address) : "",
+            phone: data.phone ? decryptField(data.phone) : "",
+            countryCode: data.countryCode ? decryptField(data.countryCode) : "+91",
+            email: userEmail || (data.email ? decryptField(data.email) : ""),
+            taxRate: data.taxRate ? decryptNumberField(data.taxRate, 10) : 10,
+            logo: data.logo ? decryptField(data.logo) : "",
+            gstNumber: data.gstNumber ? decryptField(data.gstNumber) : "",
+          };
+
+          setFormState(decrypted);
+          setIsOtherType(decrypted.type === "other");
+          setBusinessConfig(decrypted);
+        }
+      } catch (err) {
+        console.error("Error loading settings:", err);
+      }
+    };
+
+    loadDecryptedData();
+  }, [userEmail]); // Reload when userEmail is available
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    // Business Name validation - only alphabets and spaces
+    if (!formState.name.trim()) {
+      newErrors.name = t("business_name_required");
+    } else if (!/^[A-Za-z\s]+$/.test(formState.name)) {
+      newErrors.name = t("business_name_alphabets");
     }
 
-    // Check if this is likely encrypted data (base64 format with specific pattern)
-    // Firebase push IDs start with '-' and UUIDs have specific patterns
-    const isLikelyEncrypted = encrypted.length > 20 && 
-                             !encrypted.startsWith('-') && 
-                             !encrypted.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    // Address validation - alphanumeric with common punctuation
+    if (!formState.address.trim()) {
+      newErrors.address = t("address_required");
+    } else if (!/^[A-Za-z0-9\s.,#-]+$/.test(formState.address)) {
+      newErrors.address = t("address_alphanumeric");
+    }
+
+    // Phone validation - exactly 10 digits
+    if (!formState.phone.trim()) {
+      newErrors.phone = t("phone_required");
+    } else if (!/^\d{10}$/.test(formState.phone)) {
+      newErrors.phone = t("phone_10_digits");
+    }
+
+    // Email validation - only if it's different from the authenticated user's email
+    if (formState.email !== userEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email)) {
+      newErrors.email = t("valid_email");
+    }
+
+    // GST Number validation (Indian format)
+    if (formState.gstNumber && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(formState.gstNumber)) {
+      newErrors.gstNumber = t("valid_gst");
+    }
+
+    // Tax Rate validation
+    if (isNaN(formState.taxRate) || formState.taxRate < 0 || formState.taxRate > 100) {
+      newErrors.taxRate = t("valid_tax_rate");
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
     
-    if (!isLikelyEncrypted) {
-        return encrypted;
+    // Don't allow editing the email field if it's the authenticated user's email
+    if (name === "email" && userEmail && value !== userEmail) {
+      return;
+    }
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: "" }));
+    }
+
+    setFormState({
+      ...formState,
+      [name]: name === "taxRate" ? 
+        (value === "" ? 0 : Math.max(0, Math.min(100, parseFloat(value) || 0))) : 
+        value,
+    });
+  };
+
+  const handleSelectChange = (value: string) => {
+    if (value === "other") {
+      setIsOtherType(true);
+      setFormState({ ...formState, type: "" });
+    } else {
+      setIsOtherType(false);
+      setFormState({ ...formState, type: value });
+    }
+  };
+
+  const handleCountryCodeChange = (value: string) => {
+    setFormState({ ...formState, countryCode: value });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      toast({
+        title: t("error"),
+        description: t("fix_errors"),
+        variant: "destructive",
+      });
+      return;
     }
 
     try {
-        const bytes = CryptoJS.AES.decrypt(encrypted, SECRET_KEY);
-        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-        return decrypted || encrypted;
-    } catch (err) {
-        console.warn("Decryption error for field:", encrypted);
-        return encrypted;
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+
+      const taxRate = isNaN(formState.taxRate) ? 10 : formState.taxRate;
+
+      const encryptedConfig = {
+        name: encryptField(formState.name),
+        type: encryptField(formState.type),
+        address: encryptField(formState.address),
+        phone: encryptField(formState.phone),
+        countryCode: encryptField(formState.countryCode),
+        email: encryptField(userEmail), // Always use the authenticated user's email
+        taxRate: encryptField(taxRate),
+        logo: encryptField(formState.logo),
+        gstNumber: encryptField(formState.gstNumber),
+        active: true,
+      };
+
+      await update(ref(database, `users/${user.uid}/businessConfig`), encryptedConfig);
+      setBusinessConfig({ ...formState, taxRate, email: userEmail });
+
+      toast({
+        title: t("success"),
+        description: t("Settings_updated"),
+      });
+    } catch (error) {
+      console.error("Update error:", error);
+      toast({
+        title: t("error"),
+        description: t("update_failed"),
+        variant: "destructive",
+      });
     }
-};
+  };
 
-// Safe number decryption with fallback
-const decryptNumberField = (encrypted: string, defaultValue = 0): number => {
-    if (!encrypted) return defaultValue;
-    
-    // If it's already a number, return it
-    if (typeof encrypted === 'number') return encrypted;
-    
-    // If it's a string that looks like a number, parse it
-    if (typeof encrypted === 'string' && !isNaN(parseFloat(encrypted))) {
-        return parseFloat(encrypted);
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: t("error"),
+        description: t("only_images"),
+        variant: "destructive",
+      });
+      return;
     }
-    
-    // Otherwise try to decrypt
-    const decrypted = decryptField(encrypted);
-    const num = parseFloat(decrypted);
-    return isNaN(num) ? defaultValue : num;
-};
 
-const decryptSaleData = (sale: any) => {
-    if (!sale) return null;
-    
-    return {
-        ...sale,
-        id: sale.id, // ID is not encrypted (Firebase push ID or UUID)
-        date: sale.date, // Date is not encrypted
-        customerName: decryptField(sale.customerName || ''),
-        customerPhone: decryptField(sale.customerPhone || ''),
-        businessName: decryptField(sale.businessName || ''),
-        tabName: sale.tabName ? decryptField(sale.tabName) : undefined,
-        paymentMethod: decryptField(sale.paymentMethod || 'cash'),
-        items: sale.items?.map((item: any) => ({
-            ...item,
-            id: item.id, // Item ID is not encrypted
-            name: decryptField(item.name),
-            price: decryptNumberField(item.price?.toString(), 0),
-            quantity: item.quantity // Quantity is not sensitive
-        })) || [],
-        subtotal: decryptNumberField(sale.subtotal?.toString(), 0),
-        tax: decryptNumberField(sale.tax?.toString(), 0),
-        discountAmount: decryptNumberField(sale.discountAmount?.toString(), 0),
-        grandTotal: decryptNumberField(sale.grandTotal?.toString(), 0),
-        customerInfo: sale.customerInfo ? {
-            name: decryptField(sale.customerInfo.name || ''),
-            phone: decryptField(sale.customerInfo.phone || ''),
-            email: sale.customerInfo.email ? decryptField(sale.customerInfo.email) : undefined,
-            paymentTerms: sale.customerInfo.paymentTerms || 'due_on_receipt',
-            dueDate: sale.customerInfo.dueDate || null,
-            lateFeeEnabled: sale.customerInfo.lateFeeEnabled || false,
-            lateFeeAmount: sale.customerInfo.lateFeeAmount || 0,
-            lateFeeType: sale.customerInfo.lateFeeType || 'percentage',
-            remindersSent: sale.customerInfo.remindersSent || 0,
-            lastReminderSent: sale.customerInfo.lastReminderSent || null,
-            isPaid: sale.customerInfo.isPaid || false,
-            paymentDate: sale.customerInfo.paymentDate || null
-        } : undefined
-    };
-};
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: t("error"),
+        description: t("image_too_large"),
+        variant: "destructive",
+      });
+      return;
+    }
 
-const SalesHistory = () => {
-    const { t } = useTranslation("sale history");
-    const { sales: contextSales, isLoading, refreshSales } = useBilling();
-    const [sales, setSales] = useState(contextSales.map(decryptSaleData));
-    const [searchQuery, setSearchQuery] = useState("");
-    const [dateFilter, setDateFilter] = useState("");
-    const [timeRange, setTimeRange] = useState<"all" | "todays" | "week" | "month" | "year">("all");
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [saleToDelete, setSaleToDelete] = useState<string | null>(null);
-    const isMobile = useIsMobile();
-    const navigate = useNavigate();
-    
-    useEffect(() => {
-        if (contextSales.length > 0) {
-            const sortedSales = [...contextSales]
-                .map(decryptSaleData)
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setSales(sortedSales);
-        } else {
-            setSales([]);
-        }
-    }, [contextSales]);
+    setIsUploading(true);
 
-    const getFilteredSales = () => {
-        const now = new Date();
-        let filtered = [...sales];
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", "quick_bill_image");
 
-        switch (timeRange) {
-            case "todays":
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                filtered = filtered.filter(sale => {
-                    const saleDate = new Date(sale.date);
-                    return saleDate >= today && saleDate < tomorrow;
-                });
-                break;
-            case "week":
-                const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                filtered = filtered.filter(sale => new Date(sale.date) >= oneWeekAgo);
-                break;
-            case "month":
-                const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-                filtered = filtered.filter(sale => new Date(sale.date) >= oneMonthAgo);
-                break;
-            case "year":
-                const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-                filtered = filtered.filter(sale => new Date(sale.date) >= oneYearAgo);
-                break;
-            default:
-                break;
-        }
+    try {
+      const res = await fetch("https://api.cloudinary.com/v1_1/db0zuhgnc/image/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-        return filtered.filter(sale => {
-            if (!sale) return false;
-            const matchesSearch = sale.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                sale.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                                sale.customerPhone?.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesDate = dateFilter ? sale.date?.startsWith(dateFilter) : true;
-            return matchesSearch && matchesDate;
-        });
-    };
-
-    const filteredSales = getFilteredSales();
-
-    const handleDeleteSale = async () => {
-        if (!saleToDelete) return;
-        
-        try {
-            const user = auth.currentUser;
-            if (!user) {
-                throw new Error(t('notSignedIn'));
-            }
-
-            const saleData = sales.find(s => s.id === saleToDelete);
-            if (!saleData) {
-                throw new Error(t('saleNotFound'));
-            }
-
-            const saleRef = ref(database, `users/${user.uid}/sales/${saleToDelete}`);
-            const saleByDateRef = ref(database, `users/${user.uid}/salesByDate/${new Date(saleData.date).toISOString().split('T')[0]}/${saleToDelete}`);
-
-            await Promise.all([
-                remove(saleRef),
-                remove(saleByDateRef)
-            ]);
-            
-            setSales(prevSales => prevSales.filter(sale => sale.id !== saleToDelete));
-            
-            toast({
-                title: t('success'),
-                description: t('saleDeleted'),
-            });
-            
-            if (refreshSales && typeof refreshSales === 'function') {
-                await refreshSales();
-            }
-            
-        } catch (error: any) {
-            console.error("Deletion error:", error);
-            if (refreshSales && typeof refreshSales === 'function') {
-                await refreshSales();
-            }
-        } finally {
-            setSaleToDelete(null);
-            setDeleteDialogOpen(false);
-        }
-    };
-
-    const handleMarkAsPaid = async (saleId: string) => {
-        try {
-            const user = auth.currentUser;
-            if (!user) {
-                throw new Error(t('notSignedIn'));
-            }
-
-            const now = new Date().toISOString();
-            const updates: any = {};
-            const salePath = `users/${user.uid}/sales/${saleId}`;
-            
-            updates[`${salePath}/customerInfo/isPaid`] = true;
-            updates[`${salePath}/customerInfo/paymentDate`] = now;
-            
-            await update(ref(database), updates);
-            
-            toast({
-                title: t('success'),
-                description: t('markedAsPaid'),
-            });
-            
-            if (refreshSales && typeof refreshSales === 'function') {
-                await refreshSales();
-            }
-            
-        } catch (error) {
-            console.error("Error marking as paid:", error);
-            toast({
-                title: t('error'),
-                description: t('markPaidError'),
-                variant: "destructive",
-            });
-        }
-    };
-
-    const exportToExcel = () => {
-        if (filteredSales.length === 0) {
-            toast({
-                title: t('error'),
-                description: t('noDataToExport'),
-                variant: "destructive",
-            });
-            return;
-        }
-        
-        const dataToExport = filteredSales.map(sale => ({
-            [t('saleId')]: sale.id,
-            [t('date')]: new Date(sale.date).toLocaleString(),
-            [t('customerName')]: sale.customerName || t('na'),
-            [t('customerPhone')]: sale.customerPhone || t('na'),
-            [t('itemsCount')]: sale.items?.reduce((sum, item) => sum + (item.quantity || 0), 0),
-            [t('subtotal')]: sale.subtotal,
-            [t('discount')]: sale.discountAmount || 0,
-            [t('tax')]: sale.tax || 0,
-            [t('total')]: sale.grandTotal,
-            [t('paymentMethod')]: sale.paymentMethod,
-            [t('paymentStatus')]: sale.customerInfo?.isPaid ? t('paid') : t('unpaid'),
-            [t('dueDate')]: sale.customerInfo?.dueDate ? 
-                new Date(sale.customerInfo.dueDate).toLocaleDateString() : t('dueOnReceipt'),
-            [t('lateFee')]: sale.customerInfo?.lateFeeEnabled ? 
-                `${sale.customerInfo.lateFeeAmount}${sale.customerInfo.lateFeeType === 'percentage' ? '%' : ''}` : t('none'),
-            [t('remindersSent')]: sale.customerInfo?.remindersSent || 0,
-        }));
-
-        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, t('salesHistory'));
-        
-        let fileName = t('salesHistory');
-        if (timeRange !== "all") {
-            fileName += `_${t(timeRange)}`;
-        }
-        fileName += `_${new Date().toISOString().slice(0,10)}.xlsx`;
-        
-        XLSX.writeFile(workbook, fileName);
-        
+      const data = await res.json();
+      if (data.secure_url) {
+        setFormState((prev) => ({ ...prev, logo: data.secure_url }));
         toast({
-            title: t('success'),
-            description: t('exportSuccess', { count: filteredSales.length }),
+          title: t("success"),
+          description: t("logo_uploaded"),
         });
-    };
-
-    useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const userRef = ref(database, `users/${user.uid}/business/active`);
-    
-    const unsubscribe = onValue(userRef, (snapshot) => {  // Fixed: Added arrow =>
-        const isActive = snapshot.exists() ? snapshot.val() : false;
-        
-        if (!isActive) {
-            auth.signOut().then(() => {
-                navigate("/login", {
-                    state: { accountDisabled: true },
-                    replace: true
-                });
-                toast({
-                    title: t('accountDisabledTitle'),
-                    description: t('accountDisabled'),
-                    variant: "destructive",
-                });
-            });
-        }
-    });
-
-    return () => unsubscribe();
-}, [navigate, t]);
-
-    const getPaymentStatus = (sale: any) => {
-        if (sale.customerInfo?.isPaid) {
-            return <span className="text-green-600">{t('Paid')}</span>;
-        }
-        
-        const dueDate = sale.customerInfo?.dueDate ? new Date(sale.customerInfo.dueDate) : null;
-        const now = new Date();
-        
-        if (!dueDate) {
-            return <span className="text-yellow-600">{t('DueOnReceipt')}</span>;
-        }
-        
-        if (now > dueDate) {
-            return <span className="text-red-600">{t('Overdue')}</span>;
-        }
-        
-        return <span className="text-blue-600">{t('Due')} {format(dueDate, 'MMM dd')}</span>;
-    };
-
-    if (isLoading) {
-        return (
-            <Layout>
-                <div className="space-y-4">
-                    <Skeleton className="h-10 w-1/3" />
-                    <Skeleton className="h-[500px] w-full" />
-                </div>
-            </Layout>
-        );
+      } else {
+        throw new Error("Invalid response from upload");
+      }
+    } catch (err) {
+      console.error("Upload error:", err);
+      toast({
+        title: t("error"),
+        description: t("upload_failed"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
     }
-    
-    return (
-        <Layout>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <h1 className="text-2xl sm:text-3xl font-bold text-billing-dark dark:text-white">
-                    {t('SalesHistory')}
-                </h1>
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                    <Select 
-                        value={timeRange} 
-                        onValueChange={(value: "all" | "todays" | "week" | "month" | "year") => setTimeRange(value)}
-                    >
-                        <SelectTrigger className="w-full sm:w-[140px]">
-                            <SelectValue placeholder={t('TimeRange')} />
+  };
+
+  const goToSubscriptionPage = () => {
+    navigate("/subscriptions");
+  };
+
+  return (
+    <Layout>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-billing-dark dark:text-white">{t("Settings")}</h1>
+        <div className="flex items-center space-x-2">
+          <Label>{t("Language")}</Label>
+          <Select value={i18n.language} onValueChange={changeLanguage}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder={t("Language")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">{t("English")}</SelectItem>
+              <SelectItem value="hi">{t("Hindi")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <Tabs defaultValue="business">
+        <TabsList className="mb-6">
+          <TabsTrigger value="business">{t("Business")}</TabsTrigger>
+          <TabsTrigger value="appearance">{t("Appearance")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="business">
+          <Card>
+            <CardHeader><CardTitle>{t("Business_Settings")}</CardTitle></CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <InputField 
+                    name="name" 
+                    label={t("Business Name")} 
+                    value={formState.name} 
+                    onChange={handleChange} 
+                    required 
+                    error={errors.name}
+                    placeholder="e.g. My Business"
+                  />
+                  
+                  <div className="space-y-2">
+                    <Label>{t("Business Type")}</Label>
+                    <Select value={isOtherType ? "other" : formState.type} onValueChange={handleSelectChange}>
+                      <SelectTrigger><SelectValue placeholder={t("Select_business_type")} /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cafe">{t("Cafe")}</SelectItem>
+                        <SelectItem value="grocery">{t("Grocery Store")}</SelectItem>
+                        <SelectItem value="retail">{t("Retail Store")}</SelectItem>
+                        <SelectItem value="restaurant">{t("Restaurant")}</SelectItem>
+                        <SelectItem value="other">{t("Other")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {isOtherType && (
+                      <Input 
+                        name="type" 
+                        value={formState.type} 
+                        onChange={handleChange} 
+                        required 
+                        placeholder={t("Enter_business_type")}
+                      />
+                    )}
+                  </div>
+                  
+                  <InputField 
+                    name="address" 
+                    label={t("Business_address")} 
+                    value={formState.address} 
+                    onChange={handleChange} 
+                    required 
+                    error={errors.address}
+                    placeholder="e.g. 123 Main St, City"
+                  />
+                  
+                  <div className="space-y-2">
+                    <Label>{t("Phone_number")}</Label>
+                    <div className="flex gap-2">
+                      <Select value={formState.countryCode} onValueChange={handleCountryCodeChange}>
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">{t('AllTime')}</SelectItem>
-                            <SelectItem value="todays">{t('Todays')}</SelectItem>
-                            <SelectItem value="week">{t('ThisWeek')}</SelectItem>
-                            <SelectItem value="month">{t('ThisMonth')}</SelectItem>
-                            <SelectItem value="year">{t('ThisYear')}</SelectItem>
+                          {countryCodes.map((country) => (
+                            <SelectItem key={country.code} value={country.code}>
+                              {country.code} ({country.country})
+                            </SelectItem>
+                          ))}
                         </SelectContent>
-                    </Select>
-                    <Button onClick={exportToExcel} className="w-full sm:w-auto">
-                        <Download className="h-4 w-4 mr-1 sm:mr-2" />
-                        {t('Export')}
-                    </Button>
-                </div>
-            </div>
-            
-            <Card className="mb-6">
-                <div className="p-4 border-b flex flex-col sm:flex-row gap-4">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-                        <Input
-                            placeholder={t('SearchPlaceholder')}
-                            className="pl-10"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
+                      </Select>
+                      <Input
+                        name="phone"
+                        value={formState.phone}
+                        onChange={handleChange}
+                        required
+                        inputMode="numeric"
+                        placeholder="1234567890"
+                        maxLength={10}
+                        className="flex-1"
+                      />
                     </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <Calendar className="text-billing-secondary h-4 w-4 flex-shrink-0" />
-                        <Input
-                            type="date"
-                            value={dateFilter}
-                            onChange={(e) => setDateFilter(e.target.value)}
-                            className="w-full"
-                        />
-                    </div>
+                    {errors.phone && <p className="text-sm text-red-500">{errors.phone}</p>}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>{t("Email_address")}</Label>
+                    <Input
+                      name="email"
+                      value={userEmail || formState.email}
+                      onChange={handleChange}
+                      readOnly={!!userEmail}
+                      className={userEmail ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed" : ""}
+                      placeholder="business@example.com"
+                    />
+                    {userEmail && (
+                      <p className="text-xs text-gray-500">
+                        {t("email_locked") || "Email is locked to your account email"}
+                      </p>
+                    )}
+                    {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+                  </div>
+                  
+                  <InputField 
+                    name="taxRate" 
+                    label={t("Tax_rate")} 
+                    type="number" 
+                    value={formState.taxRate.toString()} 
+                    onChange={handleChange} 
+                    min="0" 
+                    max="100" 
+                    step="0.1"
+                    error={errors.taxRate}
+                    placeholder="0-100"
+                  />
+                  
+                  <InputField 
+                    name="gstNumber" 
+                    label={t("Gst_number")} 
+                    value={formState.gstNumber} 
+                    onChange={handleChange} 
+                    error={errors.gstNumber}
+                    placeholder="e.g. 12ABCDE1234F1Z5"
+                  />
+                  
+                  <div className="space-y-2">
+                    <Label>{t("Business_logo")}</Label>
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleLogoUpload} 
+                      disabled={isUploading} 
+                    />
+                    <Input 
+                      type="url" 
+                      value={formState.logo} 
+                      onChange={(e) => setFormState({ ...formState, logo: e.target.value })} 
+                      placeholder="Or enter image URL"
+                    />
+                    {formState.logo && (
+                      <div className="mt-2">
+                        <img src={formState.logo} alt="logo" className="h-20 object-contain" />
+                      </div>
+                    )}
+                    {isUploading && <p className="text-sm text-gray-500">{t("uploading")}</p>}
+                  </div>
                 </div>
                 
-                <div className="overflow-x-auto">
-                    {!isMobile ? (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>{t('Date')}</TableHead>
-                                    <TableHead>{t('SaleId')}</TableHead>
-                                    <TableHead>{t('Customer')}</TableHead>
-                                    <TableHead>{t('Phone')}</TableHead>
-                                    <TableHead>{t('Items')}</TableHead>
-                                    <TableHead>{t('Total')}</TableHead>
-                                    <TableHead>{t('Status')}</TableHead>
-                                    <TableHead>{t('Payment')}</TableHead>
-                                    <TableHead className="text-right">{t('Actions')}</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredSales.length > 0 ? (
-                                    filteredSales.map(sale => (
-                                        <TableRow key={sale.id}>
-                                            <TableCell>
-                                                {formatDate(sale.date)}
-                                                <div className="text-xs text-billing-secondary">
-                                                    {formatTime(sale.date)}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="font-medium">{sale.id}</TableCell>
-                                            <TableCell>{sale.customerName || t('na')}</TableCell>
-                                            <TableCell>{sale.customerPhone || t('na')}</TableCell>
-                                            <TableCell>
-                                                {sale.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)} {t('Items')}
-                                            </TableCell>
-                                            <TableCell>{formatCurrency(sale.grandTotal)}</TableCell>
-                                            <TableCell>
-                                                {getPaymentStatus(sale)}
-                                                {sale.customerInfo?.lateFeeEnabled && (
-                                                    <div className="text-xs text-red-500">
-                                                        +{formatCurrency(sale.customerInfo.lateFeeAmount || 0)}
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="capitalize">{sale.paymentMethod}</TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Dialog>
-    <DialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-            <FileText className="h-4 w-4" />
-        </Button>
-    </DialogTrigger>
-    <DialogContent className="max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto print:text-xl print:scale-[1.25] print:p-6">
-        <DialogHeader className="text-left">
-            <DialogTitle className="print:text-2xl text-xl">
-                {t('SaleDetails')}
-            </DialogTitle>
-        </DialogHeader>
-        <div className="flex justify-end mt-2 print:hidden">
-            <Button variant="outline" onClick={() => window.print()}>
-                {t('Print')}
-            </Button>
-        </div>
-        
-        <div className="py-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('SaleId')}:</span>
-                    <span className="font-medium text-right">{sale.id}</span>
+                <div className="flex flex-wrap gap-4">
+                  <Button type="submit" variant={buttonStyle} className="w-full md:w-auto">
+                    {t("Save_settings")}
+                  </Button>
+                  {/* <Button type="button" variant="outline" onClick={goToSubscriptionPage}>
+                    {t("Manage Subscriptions")}
+                  </Button> */}
                 </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('Date')}:</span>
-                    <span className="font-medium text-right">
-                        {new Date(sale.date).toLocaleString()}
-                    </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('CustomerName')}:</span>
-                    <span className="font-medium text-right">{sale.customerName || t('na')}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('CustomerPhone')}:</span>
-                    <span className="font-medium text-right">{sale.customerPhone || t('na')}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('PaymentMethod')}:</span>
-                    <span className="font-medium text-right capitalize">{sale.paymentMethod}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('PaymentStatus')}:</span>
-                    <span className="font-medium text-right">
-                        {getPaymentStatus(sale)}
-                    </span>
-                </div>
-            </div>
-            
-            <div className="border-t pt-4">
-                <h4 className="font-medium mb-3 text-lg">{t('Items')}</h4>
-                <div className="space-y-3">
-                    {sale.items?.map((item, index) => (
-                        <div key={index} className="flex justify-between text-sm items-center py-1">
-                            <span className="flex-1">
-                                {item.name} x {item.quantity}
-                            </span>
-                            <span className="font-medium">{formatCurrency((item.price || 0) * (item.quantity || 0))}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-            
-            <div className="border-t pt-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                    <span>{t('Subtotal')}</span>
-                    <span className="font-medium">{formatCurrency(sale.subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-red-500">
-                    <span>{t('Discount')}</span>
-                    <span className="font-medium">-{formatCurrency(sale.discountAmount || 0)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span>{t('Tax')}</span>
-                    <span className="font-medium">{formatCurrency(sale.tax || 0)}</span>
-                </div>
-                {sale.customerInfo?.lateFeeEnabled && (
-                    <div className="flex justify-between text-sm text-red-500">
-                        <span>{t('LateFee')}</span>
-                        <span className="font-medium">+{formatCurrency(sale.customerInfo.lateFeeAmount || 0)}</span>
-                    </div>
-                )}
-                <div className="flex justify-between font-bold pt-3 border-t text-lg">
-                    <span>{t('Total')}</span>
-                    <span>{formatCurrency(sale.grandTotal)}</span>
-                </div>
-            </div>
-        </div>
-    </DialogContent>
-</Dialog>
-                                                    
-                                                    {!sale.customerInfo?.isPaid && (
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon"
-                                                            className="text-blue-500 hover:text-blue-700"
-                                                            onClick={() => handleMarkAsPaid(sale.id)}
-                                                            title={t('markAsPaid')}
-                                                        >
-                                                            <FileText className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                    
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        className="text-red-500 hover:text-red-700"
-                                                        onClick={() => {
-                                                            setSaleToDelete(sale.id);
-                                                            setDeleteDialogOpen(true);
-                                                        }}
-                                                        title={t('Delete')}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={9} className="text-center py-8 text-billing-secondary">
-                                            {searchQuery || dateFilter ? t('noSalesMatch') : t('noSalesFound')}
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    ) : (
-                        <div className="divide-y">
-                            {filteredSales.length > 0 ? (
-                                filteredSales.map(sale => (
-                                    <div key={sale.id} className="p-4">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <div className="font-medium">{formatDate(sale.date)}</div>
-                                                <div className="text-xs text-billing-secondary">{formatTime(sale.date)}</div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Dialog>
-    <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8">
-            <FileText className="h-4 w-4 mr-1" /> {t('Details')}
-        </Button>
-    </DialogTrigger>
-    <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-            <DialogTitle>{t('SaleDetails')}</DialogTitle>
-        </DialogHeader>
-        
-        <div className="py-4 space-y-4">
-            <div className="grid grid-cols-1 gap-3">
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('SaleId')}:</span>
-                    <span className="font-medium text-right">{sale.id}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('Date')}:</span>
-                    <span className="font-medium text-right">
-                        {new Date(sale.date).toLocaleString()}
-                    </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('CustomerName')}:</span>
-                    <span className="font-medium text-right">{sale.customerName || t('na')}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('CustomerPhone')}:</span>
-                    <span className="font-medium text-right">{sale.customerPhone || t('na')}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('PaymentMethod')}:</span>
-                    <span className="font-medium text-right capitalize">{sale.paymentMethod}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span className="text-billing-secondary">{t('PaymentStatus')}:</span>
-                    <span className="font-medium text-right">
-                        {getPaymentStatus(sale)}
-                    </span>
-                </div>
-            </div>
-            
-            <div className="border-t pt-4">
-                <h4 className="font-medium mb-3">{t('Items')}</h4>
-                <div className="space-y-2">
-                    {sale.items?.map((item, index) => (
-                        <div key={index} className="flex justify-between text-sm items-center">
-                            <span className="flex-1">
-                                {item.name} x {item.quantity}
-                            </span>
-                            <span className="font-medium">{formatCurrency((item.price || 0) * (item.quantity || 0))}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-            
-            <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                    <span>{t('Subtotal')}</span>
-                    <span className="font-medium">{formatCurrency(sale.subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-red-500">
-                    <span>{t('Discount')}</span>
-                    <span className="font-medium">-{formatCurrency(sale.discountAmount || 0)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                    <span>{t('Tax')}</span>
-                    <span className="font-medium">{formatCurrency(sale.tax || 0)}</span>
-                </div>
-                {sale.customerInfo?.lateFeeEnabled && (
-                    <div className="flex justify-between text-sm text-red-500">
-                        <span>{t('LateFee')}</span>
-                        <span className="font-medium">+{formatCurrency(sale.customerInfo.lateFeeAmount || 0)}</span>
-                    </div>
-                )}
-                <div className="flex justify-between font-bold pt-2 border-t">
-                    <span>{t('Total')}</span>
-                    <span>{formatCurrency(sale.grandTotal)}</span>
-                </div>
-            </div>
-            
-            {!sale.customerInfo?.isPaid && (
-                <div className="pt-4 border-t">
-                    <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="w-full"
-                        onClick={() => handleMarkAsPaid(sale.id)}
-                    >
-                        <FileText className="h-4 w-4 mr-1" /> {t('markAsPaid')}
-                    </Button>
-                </div>
-            )}
-        </div>
-    </DialogContent>
-</Dialog>
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    className="h-8 text-red-500 hover:text-red-700"
-                                                    onClick={() => {
-                                                        setSaleToDelete(sale.id);
-                                                        setDeleteDialogOpen(true);
-                                                    }}
-                                                >
-                                                    <Trash2 className="h-4 w-4 mr-1" /> {t('Delete')}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 text-sm mt-3 gap-2">
-                                            <div>
-                                                <div className="text-billing-secondary">{t('Customer')}</div>
-                                                <div>{sale.customerName || t('na')}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-billing-secondary">{t('Phone')}</div>
-                                                <div>{sale.customerPhone || t('na')}</div>
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 text-sm mt-2 gap-2">
-                                            <div>
-                                                <div className="text-billing-secondary">{t('Items')}</div>
-                                                <div>{sale.items?.reduce((sum, item) => sum + (item.quantity || 0), 0)}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-billing-secondary">{t('Payment')}</div>
-                                                <div className="capitalize">{sale.paymentMethod}</div>
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 text-sm mt-2 gap-2">
-                                            <div>
-                                                <div className="text-billing-secondary">{t('Status')}</div>
-                                                <div>{getPaymentStatus(sale)}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-billing-secondary">{t('Total')}</div>
-                                                <div className="font-bold text-billing-primary">{formatCurrency(sale.grandTotal)}</div>
-                                            </div>
-                                        </div>
-                                        <div className="mt-2 pt-2 border-t">
-                                            <span className="text-sm text-billing-secondary">
-                                                {t('SaleId')}: {sale.id?.substring(0, 8)}...
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-center py-8 text-billing-secondary">
-                                    {searchQuery || dateFilter ? t('noSalesMatch') : t('noSalesFound')}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </Card>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>{t('ConfirmDeleteTitle')}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {t('ConfirmDeleteMessage')}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
-                        <AlertDialogAction 
-                            className="bg-red-500 hover:bg-red-600"
-                            onClick={handleDeleteSale}
-                        >
-                            {t('Delete')}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </Layout>
-    );
+        <TabsContent value="appearance">
+          <AppearanceSettings />
+        </TabsContent>
+      </Tabs>
+    </Layout>
+  );
 };
 
-export default SalesHistory;
+interface InputFieldProps {
+  name: string;
+  label: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  required?: boolean;
+  type?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  min?: string;
+  max?: string;
+  step?: string;
+  error?: string;
+  placeholder?: string;
+}
+
+const InputField = ({ name, label, error, ...props }: InputFieldProps) => (
+  <div className="space-y-2">
+    <Label htmlFor={name}>{label}</Label>
+    <Input id={name} name={name} {...props} />
+    {error && <p className="text-sm text-red-500">{error}</p>}
+  </div>
+);
+
+export default Settings;

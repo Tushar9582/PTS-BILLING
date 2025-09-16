@@ -22,12 +22,10 @@ const encryptField = (val: any) => CryptoJS.AES.encrypt(val.toString(), SECRET_K
 
 const decryptField = (cipherText: string) => {
   try {
-    // Check if the text looks like encrypted data (contains non-printable characters or is base64-like)
     if (!cipherText || typeof cipherText !== 'string' || cipherText.trim() === '') {
       return cipherText;
     }
     
-    // Check if it might already be decrypted (contains only printable characters)
     if (/^[A-Za-z0-9\s.,@\-_]+$/.test(cipherText)) {
       return cipherText;
     }
@@ -35,7 +33,6 @@ const decryptField = (cipherText: string) => {
     const bytes = CryptoJS.AES.decrypt(cipherText, SECRET_KEY);
     const decrypted = bytes.toString(CryptoJS.enc.Utf8);
     
-    // If decryption resulted in empty string, return original
     if (!decrypted) {
       return cipherText;
     }
@@ -43,22 +40,19 @@ const decryptField = (cipherText: string) => {
     return decrypted;
   } catch (err) {
     console.error("Decryption error:", err, "for value:", cipherText);
-    return cipherText; // Return original value if decryption fails
+    return cipherText;
   }
 };
 
 const decryptNumberField = (cipherText: string, defaultValue = 10) => {
   try {
-    // First try to decrypt if it's encrypted
     const decryptedText = decryptField(cipherText);
     
-    // If decryption returned the original text, try to parse it directly
     if (decryptedText === cipherText) {
       const num = parseFloat(cipherText);
       return isNaN(num) ? defaultValue : num;
     }
     
-    // Otherwise, parse the decrypted text
     const num = parseFloat(decryptedText);
     return isNaN(num) ? defaultValue : num;
   } catch (err) {
@@ -88,7 +82,7 @@ const Settings = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isOtherType, setIsOtherType] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [userEmail, setUserEmail] = useState(""); // Store the authenticated user's email
+  const [userEmail, setUserEmail] = useState("");
 
   const [formState, setFormState] = useState<FormState>({
     name: "",
@@ -128,11 +122,9 @@ const Settings = () => {
   }, [i18n]);
 
   useEffect(() => {
-    // Get the authenticated user's email
     const user = auth.currentUser;
     if (user && user.email) {
       setUserEmail(user.email);
-      // Set the email in form state
       setFormState(prev => ({ ...prev, email: user.email || "" }));
     }
   }, []);
@@ -169,43 +161,37 @@ const Settings = () => {
     };
 
     loadDecryptedData();
-  }, [userEmail]); // Reload when userEmail is available
+  }, [userEmail]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    // Business Name validation - only alphabets and spaces
     if (!formState.name.trim()) {
       newErrors.name = t("business_name_required");
     } else if (!/^[A-Za-z\s]+$/.test(formState.name)) {
       newErrors.name = t("business_name_alphabets");
     }
 
-    // Address validation - alphanumeric with common punctuation
     if (!formState.address.trim()) {
       newErrors.address = t("address_required");
     } else if (!/^[A-Za-z0-9\s.,#-]+$/.test(formState.address)) {
       newErrors.address = t("address_alphanumeric");
     }
 
-    // Phone validation - exactly 10 digits
     if (!formState.phone.trim()) {
       newErrors.phone = t("phone_required");
     } else if (!/^\d{10}$/.test(formState.phone)) {
       newErrors.phone = t("phone_10_digits");
     }
 
-    // Email validation - only if it's different from the authenticated user's email
     if (formState.email !== userEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formState.email)) {
       newErrors.email = t("valid_email");
     }
 
-    // GST Number validation (Indian format)
     if (formState.gstNumber && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(formState.gstNumber)) {
       newErrors.gstNumber = t("valid_gst");
     }
 
-    // Tax Rate validation
     if (isNaN(formState.taxRate) || formState.taxRate < 0 || formState.taxRate > 100) {
       newErrors.taxRate = t("valid_tax_rate");
     }
@@ -217,12 +203,10 @@ const Settings = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     
-    // Don't allow editing the email field if it's the authenticated user's email
     if (name === "email" && userEmail && value !== userEmail) {
       return;
     }
     
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
     }
@@ -273,7 +257,7 @@ const Settings = () => {
         address: encryptField(formState.address),
         phone: encryptField(formState.phone),
         countryCode: encryptField(formState.countryCode),
-        email: encryptField(userEmail), // Always use the authenticated user's email
+        email: encryptField(userEmail),
         taxRate: encryptField(taxRate),
         logo: encryptField(formState.logo),
         gstNumber: encryptField(formState.gstNumber),
@@ -301,7 +285,6 @@ const Settings = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast({
         title: t("error"),
@@ -311,7 +294,6 @@ const Settings = () => {
       return;
     }
 
-    // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
       toast({
         title: t("error"),
@@ -355,10 +337,6 @@ const Settings = () => {
     }
   };
 
-  const goToSubscriptionPage = () => {
-    navigate("/subscriptions");
-  };
-
   return (
     <Layout>
       <div className="flex justify-between items-center mb-6">
@@ -372,6 +350,7 @@ const Settings = () => {
             <SelectContent>
               <SelectItem value="en">{t("English")}</SelectItem>
               <SelectItem value="hi">{t("Hindi")}</SelectItem>
+              <SelectItem value="mr">{t("Marathi")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -396,13 +375,13 @@ const Settings = () => {
                     onChange={handleChange} 
                     required 
                     error={errors.name}
-                    placeholder="e.g. My Business"
+                    placeholder={t("business name placeholder")}
                   />
                   
                   <div className="space-y-2">
                     <Label>{t("Business Type")}</Label>
                     <Select value={isOtherType ? "other" : formState.type} onValueChange={handleSelectChange}>
-                      <SelectTrigger><SelectValue placeholder={t("Select_business_type")} /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("Select business type")} /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="cafe">{t("Cafe")}</SelectItem>
                         <SelectItem value="grocery">{t("Grocery Store")}</SelectItem>
@@ -417,32 +396,32 @@ const Settings = () => {
                         value={formState.type} 
                         onChange={handleChange} 
                         required 
-                        placeholder={t("Enter_business_type")}
+                        placeholder={t("Enter business type")}
                       />
                     )}
                   </div>
                   
                   <InputField 
                     name="address" 
-                    label={t("Business_address")} 
+                    label={t("Business Address")} 
                     value={formState.address} 
                     onChange={handleChange} 
                     required 
                     error={errors.address}
-                    placeholder="e.g. 123 Main St, City"
+                    placeholder={t("address placeholder")}
                   />
                   
                   <div className="space-y-2">
-                    <Label>{t("Phone_number")}</Label>
+                    <Label>{t("Phone Number")}</Label>
                     <div className="flex gap-2">
                       <Select value={formState.countryCode} onValueChange={handleCountryCodeChange}>
                         <SelectTrigger className="w-[100px]">
-                          <SelectValue />
+                          <SelectValue placeholder={t("select country code")} />
                         </SelectTrigger>
                         <SelectContent>
                           {countryCodes.map((country) => (
                             <SelectItem key={country.code} value={country.code}>
-                              {country.code} ({country.country})
+                              {country.code} ({t(country.country)})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -453,7 +432,7 @@ const Settings = () => {
                         onChange={handleChange}
                         required
                         inputMode="numeric"
-                        placeholder="1234567890"
+                        placeholder={t("phone placeholder")}
                         maxLength={10}
                         className="flex-1"
                       />
@@ -462,18 +441,18 @@ const Settings = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label>{t("Email_address")}</Label>
+                    <Label>{t("Email Address")}</Label>
                     <Input
                       name="email"
                       value={userEmail || formState.email}
                       onChange={handleChange}
                       readOnly={!!userEmail}
                       className={userEmail ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed" : ""}
-                      placeholder="business@example.com"
+                      placeholder={t("email placeholder")}
                     />
                     {userEmail && (
                       <p className="text-xs text-gray-500">
-                        {t("email_locked") || "Email is locked to your account email"}
+                        {t("email locked")}
                       </p>
                     )}
                     {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
@@ -481,7 +460,7 @@ const Settings = () => {
                   
                   <InputField 
                     name="taxRate" 
-                    label={t("Tax_rate")} 
+                    label={t("Tax Rate")} 
                     type="number" 
                     value={formState.taxRate.toString()} 
                     onChange={handleChange} 
@@ -489,35 +468,36 @@ const Settings = () => {
                     max="100" 
                     step="0.1"
                     error={errors.taxRate}
-                    placeholder="0-100"
+                    placeholder={t("tax rate placeholder")}
                   />
                   
                   <InputField 
                     name="gstNumber" 
-                    label={t("Gst_number")} 
+                    label={t("GST Number")} 
                     value={formState.gstNumber} 
                     onChange={handleChange} 
                     error={errors.gstNumber}
-                    placeholder="e.g. 12ABCDE1234F1Z5"
+                    placeholder={t("gst placeholder")}
                   />
                   
                   <div className="space-y-2">
-                    <Label>{t("Business_logo")}</Label>
+                    <Label>{t("Business Logo")}</Label>
                     <Input 
                       type="file" 
                       accept="image/*" 
                       onChange={handleLogoUpload} 
-                      disabled={isUploading} 
+                      disabled={isUploading}
+                      placeholder={t("upload logo")}
                     />
                     <Input 
                       type="url" 
                       value={formState.logo} 
                       onChange={(e) => setFormState({ ...formState, logo: e.target.value })} 
-                      placeholder="Or enter image URL"
+                      placeholder={t("logo url placeholder")}
                     />
                     {formState.logo && (
                       <div className="mt-2">
-                        <img src={formState.logo} alt="logo" className="h-20 object-contain" />
+                        <img src={formState.logo} alt={t("logo alt")} className="h-20 object-contain" />
                       </div>
                     )}
                     {isUploading && <p className="text-sm text-gray-500">{t("uploading")}</p>}
@@ -526,11 +506,8 @@ const Settings = () => {
                 
                 <div className="flex flex-wrap gap-4">
                   <Button type="submit" variant={buttonStyle} className="w-full md:w-auto">
-                    {t("Save_settings")}
+                    {t("Save Settings")}
                   </Button>
-                  {/* <Button type="button" variant="outline" onClick={goToSubscriptionPage}>
-                    {t("Manage Subscriptions")}
-                  </Button> */}
                 </div>
               </form>
             </CardContent>

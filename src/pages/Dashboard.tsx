@@ -505,6 +505,22 @@ const Dashboard = () => {
   const uniqueSaleDates = useMemo(() => new Set(validSales.map(sale => sale.date.split('T')[0])), [validSales]);
   const dailyAverage = useMemo(() => uniqueSaleDates.size > 0 ? totalRevenue / uniqueSaleDates.size : 0, [uniqueSaleDates, totalRevenue]);
 
+  // Calculate payment method breakdown
+  const paymentMethodData = useMemo(() => {
+    const methods = ['Cash', 'Card', 'UPI'];
+    return methods.map(method => {
+      const methodSales = validSales.filter(sale => sale.paymentMethod === method);
+      const methodRevenue = methodSales.reduce((sum, sale) => sum + (sale.grandTotal || 0), 0);
+      const percentage = totalRevenue > 0 ? (methodRevenue / totalRevenue) * 100 : 0;
+      
+      return {
+        method,
+        revenue: methodRevenue,
+        percentage
+      };
+    });
+  }, [validSales, totalRevenue]);
+
   return (
     <>
       <Layout>
@@ -549,7 +565,27 @@ const Dashboard = () => {
                 {t('Todays_revenue')}
               </CardTitle>
             </CardHeader>
-             
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-xl md:text-2xl font-bold dark:text-white">
+                  {formatCurrency(todayRevenue)}
+                </div>
+                <div className="flex items-center">
+                  {revenueTrend >= 0 ? (
+                    <TrendingUp className="h-4 w-4 text-billing-success mr-1" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4 text-billing-error mr-1" />
+                  )}
+                  <span className={`text-xs ${revenueTrend >= 0 ? 'text-billing-success' : 'text-billing-error'}`}>
+                    {revenueTrend >= 0 ? '+' : ''}{revenueTrend.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {todaySales.length} {t('sales_today')}
+              </p>
+              {getBusinessAnimation()}
+            </CardContent>
           </Card>
 
           <Card className="bg-white dark:bg-gray-800 dark:text-white relative overflow-hidden animate-fade-in" style={{ animationDelay: "0.1s" }}>
@@ -636,23 +672,18 @@ const Dashboard = () => {
                 <div>
                   <h3 className="text-sm font-medium mb-2 dark:text-gray-300">{t('Payment_methods')}</h3>
                   <div className="space-y-2">
-                    {['Cash', 'Card', 'UPI'].map(method => {
-                      const methodSales = validSales.filter(sale => sale.paymentMethod === method);
-                      const methodRevenue = methodSales.reduce((sum, sale) => sum + (sale.grandTotal || 0), 0);
-                      const percentage = totalRevenue > 0 ? (methodRevenue / totalRevenue) * 100 : 0;
-                      return (
-                        <div key={method} className="flex items-center">
-                          <div className="w-24 text-sm capitalize">{t(method)}</div>
-                          <div className="flex-1 mx-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-billing-primary rounded-full"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                          <div className="w-20 text-right text-sm">{percentage.toFixed(1)}%</div>
+                    {paymentMethodData.map(({method, percentage}) => (
+                      <div key={method} className="flex items-center">
+                        <div className="w-24 text-sm capitalize">{t(method)}</div>
+                        <div className="flex-1 mx-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-billing-primary rounded-full"
+                            style={{ width: `${percentage}%` }}
+                          />
                         </div>
-                      );
-                    })}
+                        <div className="w-20 text-right text-sm">{percentage.toFixed(1)}%</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 

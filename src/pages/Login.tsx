@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Eye, EyeOff, ChevronLeft } from "lucide-react";
+import { Loader2, Eye, EyeOff, ChevronLeft, Sun, Moon } from "lucide-react";
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -37,9 +37,15 @@ const Login: React.FC = () => {
   const [isMobileView, setIsMobileView] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Toggle dark/light mode
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
 
   // Check screen size on component mount and resize
   useEffect(() => {
@@ -398,8 +404,8 @@ const Login: React.FC = () => {
 
   if (isCheckingAuth || isCheckingStatus) {
     return (
-      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-white" />
+      <div className={`fixed inset-0 z-50 ${darkMode ? 'bg-black' : 'bg-white'} flex items-center justify-center`}>
+        <Loader2 className={`h-12 w-12 animate-spin ${darkMode ? 'text-white' : 'text-black'}`} />
       </div>
     );
   }
@@ -408,36 +414,58 @@ const Login: React.FC = () => {
     return null;
   }
 
+  // Theme classes
+  const bgColor = darkMode ? 'bg-black' : 'bg-white';
+  const textColor = darkMode ? 'text-white' : 'text-black';
+  const inputBg = darkMode ? 'bg-gray-900' : 'bg-gray-100';
+  const inputBorder = darkMode ? 'border-gray-700' : 'border-gray-300';
+  const cardBg = darkMode ? 'bg-gray-800' : 'bg-gray-100';
+  const secondaryText = darkMode ? 'text-gray-400' : 'text-gray-600';
+  const primaryButtonBg = darkMode ? 'bg-white' : 'bg-black';
+  const primaryButtonText = darkMode ? 'text-black' : 'text-white';
+  const primaryButtonHover = darkMode ? 'hover:bg-gray-200' : 'hover:bg-gray-800';
+  const logoBg = darkMode ? 'bg-gray-800' : 'bg-purple-100';
+
   // Mobile View
   if (isMobileView) {
     return (
-      <div className="min-h-screen bg-black p-6 font-sans relative text-white">
+      <div className={`min-h-screen ${bgColor} p-6 font-sans relative ${textColor}`}>
         <div className="mb-8">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="flex items-center text-white mb-6"
-          >
-            <ChevronLeft className="h-5 w-5 mr-1" />
-            Back
-          </button>
+          <div className="flex justify-between items-center mb-6">
+            <button 
+              onClick={() => navigate(-1)} 
+              className={`flex items-center ${textColor}`}
+            >
+              <ChevronLeft className="h-5 w-5 mr-1" />
+              Back
+            </button>
+            <button
+              onClick={toggleDarkMode}
+              className={`p-2 rounded-full ${darkMode ? 'bg-gray-800 text-yellow-300' : 'bg-gray-200 text-gray-700'}`}
+            >
+              {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+          </div>
           
           <div className="flex justify-center mb-8">
-            <img
-              src="https://res.cloudinary.com/defxobnc3/image/upload/v1752132668/log_jiy9id.png"
-              alt="Billing Software Logo"
-              className="w-20 h-20 filter brightness-0 invert"
-            />
+            <div className={`${logoBg} p-4 rounded-full bg-gray-600`}>
+              <img
+                src="https://res.cloudinary.com/defxobnc3/image/upload/v1752132668/log_jiy9id.png"
+                alt="Billing Software Logo"
+                className="w-16 h-16"
+              />
+            </div>
           </div>
           
           <h1 className="text-2xl font-bold text-center mb-2">Welcome Back</h1>
-          <p className="text-gray-400 text-center mb-8">
+          <p className={`text-center mb-8 ${secondaryText}`}>
             Sign in to your account to continue
           </p>
         </div>
 
         {/* Show Trial Expired Banner */}
         {trialExpired && (
-          <div className="mb-6 p-3 rounded bg-red-600 text-white text-sm text-center">
+          <div className={`mb-6 p-3 rounded ${darkMode ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700'} text-sm text-center`}>
             ⏳ Your 15-day free trial has expired. Please subscribe to continue.
           </div>
         )}
@@ -449,7 +477,7 @@ const Login: React.FC = () => {
               placeholder="Email address or mobile number"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full text-white p-4 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-white placeholder-gray-400"
+              className={`w-full ${textColor} p-4 ${inputBg} border ${inputBorder} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400`}
               disabled={isLoading}
             />
           </div>
@@ -460,7 +488,7 @@ const Login: React.FC = () => {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full text-white p-4 pr-12 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-white placeholder-gray-400"
+              className={`w-full ${textColor} p-4 pr-12 ${inputBg} border ${inputBorder} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400`}
               disabled={isLoading}
             />
             <button
@@ -479,16 +507,16 @@ const Login: React.FC = () => {
             <input
               type="checkbox"
               id="terms-mobile"
-              className="rounded bg-gray-800 border-gray-700"
+              className={`rounded ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'}`}
               checked={termsAccepted}
               onChange={(e) => setTermsAccepted(e.target.checked)}
               disabled={isLoading}
             />
-            <label htmlFor="terms-mobile" className="text-sm text-gray-300">
+            <label htmlFor="terms-mobile" className={`text-sm ${secondaryText}`}>
               I agree to the{" "}
               <button
                 type="button"
-                className="text-blue-400 hover:text-blue-300 underline"
+                className="text-blue-500 hover:text-blue-700 underline"
                 onClick={() => setTermsDialogOpen(true)}
               >
                 Terms and Conditions
@@ -498,7 +526,7 @@ const Login: React.FC = () => {
           
           <button
             onClick={handleForgotPassword}
-            className="text-sm text-blue-400 hover:text-blue-300"
+            className="text-sm text-blue-500 hover:text-blue-700"
             disabled={isLoading}
           >
             Forgot password?
@@ -508,8 +536,8 @@ const Login: React.FC = () => {
         <button
           onClick={handleLogin}
           disabled={isLoading || !termsAccepted}
-          className={`w-full py-4 rounded-lg bg-white text-black font-semibold text-lg transition duration-300 mb-6 ${
-            isLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-200"
+          className={`w-full py-4 rounded-lg ${primaryButtonBg} ${primaryButtonText} font-semibold text-lg transition duration-300 mb-6 ${
+            isLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : primaryButtonHover
           }`}
         >
           {isLoading ? "Signing in..." : "Sign In"}
@@ -517,18 +545,18 @@ const Login: React.FC = () => {
 
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-700"></div>
+            <div className={`w-full border-t ${darkMode ? 'border-gray-700' : 'border-gray-300'}`}></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-black text-gray-400">Or continue with</span>
+            <span className={`px-2 ${bgColor} ${secondaryText}`}>Or continue with</span>
           </div>
         </div>
 
         <button
           onClick={handleGoogleSignIn}
           disabled={googleLoading || !termsAccepted}
-          className={`w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-medium py-3 rounded-lg border border-gray-700 transition duration-300 mb-6 ${
-            googleLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-800"
+          className={`w-full flex items-center justify-center gap-2 ${darkMode ? 'bg-gray-900' : 'bg-white'} ${textColor} font-medium py-3 rounded-lg border ${darkMode ? 'border-gray-700' : 'border-gray-300'} transition duration-300 mb-6 ${
+            googleLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : darkMode ? "hover:bg-gray-800" : "hover:bg-gray-50"
           }`}
         >
           {googleLoading ? (
@@ -543,11 +571,11 @@ const Login: React.FC = () => {
           {googleLoading ? "Signing in..." : "Sign in with Google"}
         </button>
 
-        <p className="text-center text-gray-400 text-sm">
+        <p className={`text-center ${secondaryText} text-sm`}>
           Don't have an account?{" "}
           <Link
             to="/register"
-            className="text-white font-medium hover:underline"
+            className="text-purple-400 font-medium hover:text-purple-300 hover:underline"
             onClick={(e) => (isLoading || googleLoading) && e.preventDefault()}
           >
             Sign up
@@ -558,7 +586,7 @@ const Login: React.FC = () => {
           By continuing, you agree to our{" "}
           <button
             onClick={() => setTermsDialogOpen(true)}
-            className="text-blue-400 hover:text-blue-300"
+            className="text-blue-500 hover:text-blue-700"
           >
             Terms and Conditions
           </button>
@@ -566,10 +594,10 @@ const Login: React.FC = () => {
 
         {/* Terms and Conditions Dialog */}
         <AlertDialog open={termsDialogOpen} onOpenChange={setTermsDialogOpen}>
-          <AlertDialogContent className="bg-black border-gray-800 text-white max-w-md mx-auto">
+          <AlertDialogContent className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'} ${textColor} max-w-md mx-auto`}>
             <AlertDialogHeader>
               <AlertDialogTitle className="text-xl">Terms & Conditions</AlertDialogTitle>
-              <AlertDialogDescription className="text-gray-400 max-h-72 overflow-y-auto mt-4 text-sm space-y-3">
+              <AlertDialogDescription className={`${secondaryText} max-h-72 overflow-y-auto mt-4 text-sm space-y-3`}>
                 <p>1. This is a sample billing software for demonstration purposes only.</p>
                 <p>2. All user data is handled securely, but no guarantees are provided for data loss.</p>
                 <p>3. You must not use this software for any illegal or unauthorized purpose.</p>
@@ -580,7 +608,7 @@ const Login: React.FC = () => {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogAction className="bg-white text-black hover:bg-gray-200">
+              <AlertDialogAction className={`${darkMode ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-gray-800'}`}>
                 I Understand
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -589,15 +617,15 @@ const Login: React.FC = () => {
 
         {/* Disabled Account Dialog */}
         <AlertDialog open={isDisabledDialogOpen} onOpenChange={setIsDisabledDialogOpen}>
-          <AlertDialogContent className="bg-black border-gray-800 text-white max-w-md mx-auto">
+          <AlertDialogContent className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'} ${textColor} max-w-md mx-auto`}>
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-white">Account Disabled</AlertDialogTitle>
-              <AlertDialogDescription className="text-gray-400">
+              <AlertDialogTitle>Account Disabled</AlertDialogTitle>
+              <AlertDialogDescription className={secondaryText}>
                 Your account has been deactivated by the administrator. Please contact support to reactivate your account.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogAction className="bg-white text-black hover:bg-gray-200">
+              <AlertDialogAction className={`${darkMode ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-gray-800'}`}>
                 OK
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -609,16 +637,24 @@ const Login: React.FC = () => {
 
   // Desktop View
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4 font-sans relative">
-      <div className="flex bg-gray-800 rounded-lg overflow-hidden max-w-4xl w-full border border-white">
+    <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-black' : 'bg-gray-50'} p-4 font-sans relative`}>
+      {/* Dark/Light Mode Toggle */}
+      <button
+        onClick={toggleDarkMode}
+        className={`absolute top-4 right-4 p-2 rounded-full ${darkMode ? 'bg-gray-800 text-yellow-300' : 'bg-gray-200 text-gray-700'}`}
+      >
+        {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
+
+      <div className={`flex ${cardBg} rounded-xl shadow-lg overflow-hidden max-w-4xl w-full`}>
         {/* Left Section: Login Form */}
         <div className="flex-1 p-10 flex flex-col justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">Sign in</h2>
+            <h2 className={`text-2xl font-bold ${textColor} mb-2`}>Sign in</h2>
 
             {/* Show Trial Expired Banner */}
             {trialExpired && (
-              <div className="mb-4 p-3 rounded bg-red-600 text-white text-sm text-center">
+              <div className={`mb-4 p-3 rounded ${darkMode ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700'} text-sm text-center`}>
                 ⏳ Your 15-day free trial has expired. Please subscribe to continue.
               </div>
             )}
@@ -628,7 +664,7 @@ const Login: React.FC = () => {
               placeholder="Email address or mobile number"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full text-white p-3 mb-4 bg-black border border-white rounded-md focus:outline-none focus:ring-1 focus:ring-white placeholder-gray-400"
+              className={`w-full ${textColor} p-3 mb-4 ${darkMode ? 'bg-gray-900' : 'bg-white'} border ${darkMode ? 'border-gray-700' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400`}
               disabled={isLoading}
             />
 
@@ -638,12 +674,12 @@ const Login: React.FC = () => {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full text-white p-3 pr-10 bg-black border border-white rounded-md focus:outline-none focus:ring-1 focus:ring-white placeholder-gray-400"
+                className={`w-full ${textColor} p-3 pr-10 ${darkMode ? 'bg-gray-900' : 'bg-white'} border ${darkMode ? 'border-gray-700' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400`}
                 disabled={isLoading}
               />
               <button
                 type="button"
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white focus:outline-none"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 focus:outline-none"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={isLoading}
               >
@@ -656,7 +692,7 @@ const Login: React.FC = () => {
             </div>
 
             {/* Terms & Conditions */}
-            <div className="mb-4 flex items-start space-x-2 text-sm text-white">
+            <div className="mb-4 flex items-start space-x-2 text-sm">
               <input
                 type="checkbox"
                 id="terms"
@@ -665,11 +701,11 @@ const Login: React.FC = () => {
                 onChange={(e) => setTermsAccepted(e.target.checked)}
                 disabled={isLoading}
               />
-              <label htmlFor="terms">
+              <label htmlFor="terms" className={secondaryText}>
                 I agree to the{" "}
                 <button
                   type="button"
-                  className="underline text-blue-400 hover:text-blue-300"
+                  className="underline text-blue-500 hover:text-blue-700"
                   onClick={() => setTermsDialogOpen(true)}
                 >
                   Terms and Conditions
@@ -680,21 +716,21 @@ const Login: React.FC = () => {
             <button
               onClick={handleLogin}
               disabled={isLoading || !termsAccepted}
-              className={`w-full py-3 rounded-md bg-white text-black font-semibold text-lg transition duration-300 ${
-                isLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-200"
+              className={`w-full py-3 rounded-md ${primaryButtonBg} ${primaryButtonText} font-semibold text-lg transition duration-300 ${
+                isLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : primaryButtonHover
               }`}
             >
               {isLoading ? "Signing in..." : "Next"}
             </button>
 
-            <div className="mt-8 text-gray-400">
-              <p className="mb-4 text-center">Or sign in using</p>
+            <div className={secondaryText}>
+              <p className="mb-4 text-center mt-8">Or sign in using</p>
               <div className="flex justify-center">
                 <button
                   onClick={handleGoogleSignIn}
                   disabled={googleLoading || !termsAccepted}
-                  className={`flex items-center justify-center bg-white text-gray-700 font-semibold py-2 px-4 rounded-md border border-gray-300 transition duration-300 ${
-                    googleLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-100"
+                  className={`flex items-center justify-center ${darkMode ? 'bg-gray-700' : 'bg-white'} ${textColor} font-semibold py-2 px-4 rounded-md border ${darkMode ? 'border-gray-600' : 'border-gray-300'} transition duration-300 ${
+                    googleLoading || !termsAccepted ? "opacity-70 cursor-not-allowed" : darkMode ? "hover:bg-gray-600" : "hover:bg-gray-100"
                   }`}
                 >
                   {googleLoading ? (
@@ -711,21 +747,21 @@ const Login: React.FC = () => {
               </div>
             </div>
 
-            <p className="text-center mt-8 text-sm text-gray-400">
+            <p className={`text-center mt-8 text-sm ${secondaryText}`}>
               Don't have an account?{" "}
               <Link
                 to="/register"
-                className="text-white hover:underline"
+                className="text-purple-400 hover:text-purple-300 hover:underline"
                 onClick={(e) => (isLoading || googleLoading) && e.preventDefault()}
               >
                 Sign up now
               </Link>
             </p>
 
-            <p className="text-center mt-4 text-sm text-gray-400">
+            <p className={`text-center mt-4 text-sm ${secondaryText}`}>
               <button
                 onClick={handleForgotPassword}
-                className="text-white hover:underline"
+                className="text-blue-500 hover:underline"
                 disabled={isLoading}
               >
                 Forgot password?
@@ -735,14 +771,16 @@ const Login: React.FC = () => {
         </div>
 
         {/* Right Section */}
-        <div className="flex-1 bg-black p-10 flex flex-col items-center justify-center text-white text-center border-l border-white">
-          <img
-            src="https://res.cloudinary.com/defxobnc3/image/upload/v1752132668/log_jiy9id.png"
-            alt="Passwordless Sign-in"
-            className="w-32 md:w-40 mb-6 filter brightness-0 invert"
-          />
-          <h3 className="text-xl font-bold mb-3">Billing Software</h3>
-          <p className="mb-6 text-gray-400">
+        <div className={`flex-1 ${darkMode ? 'bg-gray-900' : 'bg-white-600'} p-10 flex flex-col items-center justify-center text-gray text-center`}>
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-gray-800'} p-6 rounded-full mb-6`}>
+            <img
+              src="https://res.cloudinary.com/defxobnc3/image/upload/v1752132668/log_jiy9id.png"
+              alt="Billing Software"
+              className="w-24 md:w-28"
+            />
+          </div>
+          <h3 className="text-xl font-bold text-gray-400 mb-3">Billing Software</h3>
+          <p className={`mb-6 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             Create professional invoices in seconds—get paid faster with automated reminders and online payments
           </p>
         </div>
@@ -750,15 +788,15 @@ const Login: React.FC = () => {
 
       {/* Disabled Account Dialog */}
       <AlertDialog open={isDisabledDialogOpen} onOpenChange={setIsDisabledDialogOpen}>
-        <AlertDialogContent className="bg-black border-white">
+        <AlertDialogContent className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'} ${textColor}`}>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Account Disabled</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-400">
+            <AlertDialogTitle>Account Disabled</AlertDialogTitle>
+            <AlertDialogDescription className={secondaryText}>
               Your account has been deactivated by the administrator. Please contact support to reactivate your account.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction className="bg-white text-black hover:bg-gray-200">
+            <AlertDialogAction className={`${darkMode ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-gray-800'}`}>
               OK
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -767,10 +805,10 @@ const Login: React.FC = () => {
 
       {/* Terms and Conditions Dialog */}
       <AlertDialog open={termsDialogOpen} onOpenChange={setTermsDialogOpen}>
-        <AlertDialogContent className="bg-black border-white text-white max-w-2xl">
+        <AlertDialogContent className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'} ${textColor} max-w-2xl`}>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl">Terms & Conditions</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-400 max-h-72 overflow-y-auto mt-4 text-sm space-y-3">
+            <AlertDialogDescription className={`${secondaryText} max-h-72 overflow-y-auto mt-4 text-sm space-y-3`}>
               <p>1. This is a sample billing software for demonstration purposes only.</p>
               <p>2. All user data is handled securely, but no guarantees are provided for data loss.</p>
               <p>3. You must not use this software for any illegal or unauthorized purpose.</p>
@@ -781,7 +819,7 @@ const Login: React.FC = () => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction className="bg-white text-black hover:bg-gray-200">
+            <AlertDialogAction className={`${darkMode ? 'bg-white text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-gray-800'}`}>
               I Understand
             </AlertDialogAction>
           </AlertDialogFooter>

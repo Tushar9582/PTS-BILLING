@@ -2,47 +2,31 @@ import React, { useState, useEffect } from "react";
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
+  signInWithPopup,
+  GoogleAuthProvider
 } from "firebase/auth";
 import { ref, set } from "firebase/database";
-import { auth, database } from "../firebase/firebaseConfig";
+import { auth, database, googleProvider } from "../firebase/firebaseConfig";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react"; // Import the eye icons
+import { Eye, EyeOff, Loader2, Moon, Sun } from "lucide-react"; 
 
 const Register: React.FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
-  const [countryCode, setCountryCode] = useState("+1"); // Default country code
+  const [countryCode, setCountryCode] = useState("+1");
   const [isMobile, setIsMobile] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState("");
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const navigate = useNavigate();
-
-  // Check system dark/light mode preference
-  useEffect(() => {
-    const checkDarkMode = () => {
-      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        setIsDarkMode(true);
-        document.documentElement.classList.add('dark');
-      } else {
-        setIsDarkMode(false);
-        document.documentElement.classList.remove('dark');
-      }
-    };
-
-    checkDarkMode();
-
-    // Listen for system theme changes
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    mediaQuery.addEventListener('change', checkDarkMode);
-
-    return () => {
-      mediaQuery.removeEventListener('change', checkDarkMode);
-    };
-  }, []);
 
   // Check screen size on component mount and resize
   useEffect(() => {
@@ -57,6 +41,27 @@ const Register: React.FC = () => {
       window.removeEventListener('resize', checkScreenSize);
     };
   }, []);
+
+  // Check for saved theme preference or respect OS preference
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('preferredTheme');
+    if (savedTheme) {
+      setDarkMode(savedTheme === 'dark');
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setDarkMode(prefersDark);
+    }
+  }, []);
+
+  // Apply theme class to body
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('preferredTheme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   // Check password strength
   useEffect(() => {
@@ -100,6 +105,16 @@ const Register: React.FC = () => {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
+    // First name validation
+    if (!firstName.trim()) {
+      newErrors.firstName = "First name is required";
+    }
+
+    // Last name validation
+    if (!lastName.trim()) {
+      newErrors.lastName = "Last name is required";
+    }
+
     // Email validation
     if (!email.trim()) {
       newErrors.email = "Email is required";
@@ -114,6 +129,11 @@ const Register: React.FC = () => {
       newErrors.password = "Password must be at least 8 characters";
     } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])/.test(password)) {
       newErrors.password = "Password must contain uppercase, lowercase, numbers and special characters";
+    }
+
+    // Confirm password validation
+    if (password !== confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
     }
 
     // Mobile number validation
@@ -149,17 +169,29 @@ const Register: React.FC = () => {
       await set(ref(database, `users/${user.uid}`), {
         uid: user.uid,
         email: user.email,
-        mobileNumber: countryCode + mobileNumber, // Save with country code
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        mobileNumber: countryCode + mobileNumber,
         countryCode: countryCode,
         mobileDigits: mobileNumber,
         createdAt: new Date().toISOString(),
         emailVerified: false,
         isActive: true,
-        preferredTheme: isDarkMode ? "dark" : "light"
+        preferredTheme: darkMode ? "dark" : "light",
+        business: {
+          active: true,
+          trialStart: Date.now(),
+          trialDuration: 15 * 24 * 60 * 60 * 1000
+        }
       });
 
-      alert("Verification link sent to your email. Please check and verify.");
-      navigate("/verify-email");
+      // Start trial timer
+      localStorage.setItem(`15day_trial_${user.uid}`, JSON.stringify({
+        startTime: Date.now(),
+        duration: 15 * 24 * 60 * 60 * 1000
+      }));
+
+      navigate("/setup", { replace: true });
     } catch (error: any) {
       let errorMessage = "Registration failed";
       
@@ -179,6 +211,58 @@ const Register: React.FC = () => {
     }
   };
 
+  const handleGoogleSignUp = async () => {
+    setGoogleLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      // Check if user exists in database, if not create a new record
+      const userRef = ref(database, `users/${user.uid}`);
+      
+      // Start trial timer for new users
+      localStorage.setItem(`15day_trial_${user.uid}`, JSON.stringify({
+        startTime: Date.now(),
+        duration: 15 * 24 * 60 * 60 * 1000
+      }));
+
+      // Create new user in database with proper structure
+      await set(ref(database, `users/${user.uid}`), {
+        uid: user.uid,
+        email: user.email,
+        firstName: user.displayName?.split(' ')[0] || '',
+        lastName: user.displayName?.split(' ')[1] || '',
+        photoURL: user.photoURL,
+        createdAt: Date.now(),
+        provider: "google",
+        emailVerified: user.emailVerified,
+        isActive: true,
+        preferredTheme: darkMode ? "dark" : "light",
+        // Add business data directly under user
+        business: {
+          active: true,
+          trialStart: Date.now(),
+          trialDuration: 15 * 24 * 60 * 60 * 1000
+        }
+      });
+
+      navigate("/setup", { replace: true });
+    } catch (error: any) {
+      console.error("Google Sign-Up Error:", error);
+      let errorMessage = "Authentication failed. Please try again.";
+      
+      if (error.code === "auth/popup-closed-by-user") {
+        errorMessage = "Sign-up was canceled. Please try again.";
+      } else if (error.code === "auth/network-request-failed") {
+        errorMessage = "Network error. Please check your connection.";
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   const handleInputChange = (setter: React.Dispatch<React.SetStateAction<string>>, field: string) => 
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setter(e.target.value);
@@ -193,7 +277,7 @@ const Register: React.FC = () => {
   };
 
   const handleMobileNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, ''); // Remove non-digit characters
+    const value = e.target.value.replace(/\D/g, '');
     if (value.length <= 10) {
       setMobileNumber(value);
       if (errors.mobileNumber) {
@@ -213,291 +297,402 @@ const Register: React.FC = () => {
     }
   };
 
+  const toggleTheme = () => {
+    setDarkMode(!darkMode);
+  };
+
   // Mobile view
   if (isMobile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-700 dark:from-gray-900 dark:to-gray-800 p-4 font-sans">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-          {/* Header with logo */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-gray-800 dark:to-gray-700 p-6 flex justify-center">
-            <img
-              src="https://res.cloudinary.com/defxobnc3/image/upload/v1752132668/log_jiy9id.png"
-              alt="Billing Software"
-              className="h-16 object-contain"
-            />
-          </div>
-          
-          {/* Form section */}
-          <div className="p-6">
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 text-center">
-              Create Account
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-6 text-center">Sign up to get started</p>
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 p-4 font-sans relative overflow-hidden">
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="absolute top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-gray-700 z-10"
+        >
+          {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
 
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Email Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={handleInputChange(setEmail, 'email')}
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  required
+        <div className="flex flex-col bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden w-full max-w-md max-h-[90vh]">
+          {/* Top Section: Image for Mobile */}
+          
+          {/* Bottom Section: Registration Form */}
+          <div className="flex-1 p-6 flex flex-col justify-between overflow-y-auto scrollbar-hide">
+            <div>
+              <div className="flex justify-center mb-4">
+                <img
+                  src="/8.png"
+                  alt="Billing Software"
+                  className="w-16 h-16"
                 />
-                {errors.email && <p className="text-sm text-red-500 mt-1">{errors.email}</p>}
               </div>
               
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Password <span className="text-red-500">*</span>
-                </label>
+              <h2 className="text-xl font-bold text-center text-gray-800 dark:text-white mb-2">Create Account</h2>
+              <p className="text-gray-600 dark:text-gray-300 text-center mb-4 text-sm">Join Pulse Billing to manage your customers</p>
+              
+              <p className="text-center text-green-500 mb-4 font-medium text-sm">
+                Start your 15-day free trial today!
+              </p>
+
+              <button
+                onClick={handleGoogleSignUp}
+                disabled={googleLoading}
+                className="w-full flex items-center justify-center gap-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium py-3 rounded-lg border border-gray-300 dark:border-gray-600 transition duration-300 mb-4 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm"
+              >
+                {googleLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <img
+                    src="https://developers.google.com/identity/images/g-logo.png"
+                    alt="Google logo"
+                    className="w-4 h-4"
+                  />
+                )}
+                {googleLoading ? "Signing up..." : "Sign up with Google"}
+              </button>
+
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or continue with email</span>
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="First Name"
+                      value={firstName}
+                      onChange={handleInputChange(setFirstName, 'firstName')}
+                      className="w-full text-gray-800 dark:text-white p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400 text-sm"
+                      disabled={isSubmitting}
+                    />
+                    {errors.firstName && <p className="text-xs text-red-500 mt-1">{errors.firstName}</p>}
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Last Name"
+                      value={lastName}
+                      onChange={handleInputChange(setLastName, 'lastName')}
+                      className="w-full text-gray-800 dark:text-white p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400 text-sm"
+                      disabled={isSubmitting}
+                    />
+                    {errors.lastName && <p className="text-xs text-red-500 mt-1">{errors.lastName}</p>}
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="email"
+                    placeholder="Email address"
+                    value={email}
+                    onChange={handleInputChange(setEmail, 'email')}
+                    className="w-full text-gray-800 dark:text-white p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400 text-sm"
+                    disabled={isSubmitting}
+                  />
+                  {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+                </div>
+
                 <div className="relative">
                   <input
-                    id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Create a strong password (min 8 characters)"
+                    placeholder="Password"
                     value={password}
                     onChange={handleInputChange(setPassword, 'password')}
-                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    required
+                    className="w-full text-gray-800 dark:text-white p-3 pr-10 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400 text-sm"
+                    disabled={isSubmitting}
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 focus:outline-none"
                     onClick={() => setShowPassword(!showPassword)}
                     disabled={isSubmitting}
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                  {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
                 </div>
-                {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
-                {password && (
-                  <div className="mt-2">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Password strength:</span>
-                      <span className={`text-xs font-medium ${getPasswordStrengthColor()}`}>
-                        {passwordStrength}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                      <div 
-                        className={`h-1.5 rounded-full ${
-                          passwordStrength === "Very Weak" ? "bg-red-500 w-1/5" :
-                          passwordStrength === "Weak" ? "bg-red-400 w-2/5" :
-                          passwordStrength === "Medium" ? "bg-yellow-500 w-3/5" :
-                          passwordStrength === "Strong" ? "bg-green-500 w-4/5" :
-                          passwordStrength === "Very Strong" ? "bg-green-600 w-full" :
-                          "bg-gray-200 dark:bg-gray-700 w-0"
-                        }`}
-                      ></div>
-                    </div>
-                  </div>
-                )}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Must include: uppercase, lowercase, numbers, and special characters (!@#$%^&*)
-                </p>
-              </div>
-              
-              <div>
-                <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Mobile Number <span className="text-red-500">*</span>
-                </label>
+
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Confirm Password"
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      if (errors.confirmPassword) {
+                        setErrors(prev => ({ ...prev, confirmPassword: "" }));
+                      }
+                    }}
+                    className="w-full text-gray-800 dark:text-white p-3 pr-10 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400 text-sm"
+                    disabled={isSubmitting}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 focus:outline-none"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    disabled={isSubmitting}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  {errors.confirmPassword && <p className="text-xs text-red-500 mt-1">{errors.confirmPassword}</p>}
+                </div>
+
                 <div className="flex gap-2">
                   <select
                     value={countryCode}
                     onChange={handleCountryCodeChange}
-                    className="w-1/4 p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="w-1/4 p-3 bg-white-600 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                   >
-                    <option value="+1">+1 (US)</option>
-                    <option value="+91">+91 (IN)</option>
-                    <option value="+44">+44 (UK)</option>
-                    <option value="+61">+61 (AU)</option>
-                    <option value="+86">+86 (CN)</option>
-                    {/* Add more country codes as needed */}
+                    <option value="+1">+1</option>
+                    <option value="+91">+91</option>
+                    <option value="+44">+44</option>
                   </select>
                   <input
-                    id="mobile"
                     type="tel"
-                    placeholder="10-digit number"
+                    placeholder="Mobile Number"
                     value={mobileNumber}
                     onChange={handleMobileNumberChange}
-                    className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    required
+                    className="flex-1 p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400 text-sm"
+                    disabled={isSubmitting}
                     maxLength={10}
                   />
                 </div>
-                {errors.mobileNumber && <p className="text-sm text-red-500 mt-1">{errors.mobileNumber}</p>}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Enter your 10-digit mobile number
-                </p>
+                {errors.mobileNumber && <p className="text-xs text-red-500 mt-1">{errors.mobileNumber}</p>}
               </div>
+
+              <button
+                onClick={handleRegister}
+                disabled={isSubmitting}
+                className={`w-full py-3 rounded-md bg-purple-600 text-white font-semibold transition duration-300 shadow-md text-sm ${
+                  isSubmitting ? "opacity-70 cursor-not-allowed" : "hover:bg-purple-700"
+                }`}
+              >
+                {isSubmitting ? "Creating Account..." : "Start Free Trial"}
+              </button>
+
+              <p className="text-center mt-4 text-xs text-gray-600 dark:text-gray-300">
+                Already have an account?{" "}
+                <Link to="/login" className="text-purple-600 dark:text-purple-400 hover:underline">
+                  Login
+                </Link>
+              </p>
             </div>
-
-            <button
-              onClick={handleRegister}
-              disabled={isSubmitting}
-              className="w-full py-3 mt-6 rounded-lg bg-blue-600 text-white font-semibold text-lg transition duration-300 hover:bg-blue-700 shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "Creating Account..." : "Register"}
-            </button>
-
-            <p className="text-center mt-6 text-sm text-gray-600 dark:text-gray-400">
-              Already have an account?{" "}
-              <Link to="/login" className="text-blue-600 dark:text-blue-400 font-medium hover:underline">
-                Login here
-              </Link>
-            </p>
-          </div>
-          
-          {/* Footer */}
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 text-center text-gray-500 dark:text-gray-400 text-xs">
-            &copy; 2025. Your Company Name. All Rights Reserved.
           </div>
         </div>
+
+        {/* Custom CSS to hide scrollbars */}
+        <style jsx>{`
+          .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
       </div>
     );
   }
 
   // Desktop view
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4 font-sans relative">
-      <div className="flex bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden max-w-4xl w-full">
-        {/* Left Section: Registration Form */}
-        <div className="flex-1 p-10 flex flex-col justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
-              Create your account
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-8">Sign up to get started</p>
+    <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 p-4 font-sans relative overflow-hidden">
+      {/* Theme Toggle */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-gray-700 z-10"
+      >
+        {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
 
-            <div className="space-y-4">
+      <div className="flex bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden max-w-4xl w-full max-h-[90vh]">
+        {/* Left Section: Registration Form */}
+        <div className="flex-1 p-10 flex flex-col justify-between overflow-y-auto scrollbar-hide">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Create Account</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-2">Join Pulse Billing to manage your customers</p>
+            
+            <p className="text-green-500 mb-6 font-medium">
+              Start your 15-day free trial today!
+            </p>
+
+            <button
+              onClick={handleGoogleSignUp}
+              disabled={googleLoading}
+              className="w-full flex items-center justify-center gap-2 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium py-3 rounded-lg border border-gray-300 dark:border-gray-600 transition duration-300 mb-6 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              {googleLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <img
+                  src="https://developers.google.com/identity/images/g-logo.png"
+                  alt="Google logo"
+                  className="w-5 h-5"
+                />
+              )}
+              {googleLoading ? "Signing up..." : "Sign up with Google"}
+            </button>
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or continue with email</span>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <input
+                    type="text"
+                    placeholder="First Name"
+                    value={firstName}
+                    onChange={handleInputChange(setFirstName, 'firstName')}
+                    className="w-full text-gray-800 dark:text-white p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400"
+                    disabled={isSubmitting}
+                  />
+                  {errors.firstName && <p className="text-sm text-red-500 mt-1">{errors.firstName}</p>}
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Last Name"
+                    value={lastName}
+                    onChange={handleInputChange(setLastName, 'lastName')}
+                    className="w-full text-gray-800 dark:text-white p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400"
+                    disabled={isSubmitting}
+                  />
+                  {errors.lastName && <p className="text-sm text-red-500 mt-1">{errors.lastName}</p>}
+                </div>
+              </div>
+
               <div>
                 <input
                   type="email"
-                  placeholder="Email address *"
+                  placeholder="Email address"
                   value={email}
                   onChange={handleInputChange(setEmail, 'email')}
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  required
+                  className="w-full text-gray-800 dark:text-white p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400"
+                  disabled={isSubmitting}
                 />
                 {errors.email && <p className="text-sm text-red-500 mt-1">{errors.email}</p>}
               </div>
-              
-              <div>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Create Password * (min 8 characters)"
-                    value={password}
-                    onChange={handleInputChange(setPassword, 'password')}
-                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 pr-10 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none"
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={isSubmitting}
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
+
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  value={password}
+                  onChange={handleInputChange(setPassword, 'password')}
+                  className="w-full text-gray-800 dark:text-white p-3 pr-10 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400"
+                  disabled={isSubmitting}
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 focus:outline-none"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isSubmitting}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
                 {errors.password && <p className="text-sm text-red-500 mt-1">{errors.password}</p>}
-                {password && (
-                  <div className="mt-2">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Password strength:</span>
-                      <span className={`text-xs font-medium ${getPasswordStrengthColor()}`}>
-                        {passwordStrength}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                      <div 
-                        className={`h-1.5 rounded-full ${
-                          passwordStrength === "Very Weak" ? "bg-red-500 w-1/5" :
-                          passwordStrength === "Weak" ? "bg-red-400 w-2/5" :
-                          passwordStrength === "Medium" ? "bg-yellow-500 w-3/5" :
-                          passwordStrength === "Strong" ? "bg-green-500 w-4/5" :
-                          passwordStrength === "Very Strong" ? "bg-green-600 w-full" :
-                          "bg-gray-200 dark:bg-gray-700 w-0"
-                        }`}
-                      ></div>
-                    </div>
-                  </div>
-                )}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  Must include: uppercase, lowercase, numbers, and special characters (!@#$%^&*)
-                </p>
               </div>
-              
-              <div>
-                <div className="flex gap-2">
-                  <select
-                    value={countryCode}
-                    onChange={handleCountryCodeChange}
-                    className="w-1/4 p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="+1">+1 (US)</option>
-                    <option value="+91">+91 (IN)</option>
-                    <option value="+44">+44 (UK)</option>
-                    <option value="+61">+61 (AU)</option>
-                    <option value="+86">+86 (CN)</option>
-                    {/* Add more country codes as needed */}
-                  </select>
-                  <input
-                    type="tel"
-                    placeholder="10-digit Mobile Number *"
-                    value={mobileNumber}
-                    onChange={handleMobileNumberChange}
-                    className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    required
-                    maxLength={10}
-                  />
-                </div>
-                {errors.mobileNumber && <p className="text-sm text-red-500 mt-1">{errors.mobileNumber}</p>}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Enter your 10-digit mobile number
-                </p>
+
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    if (errors.confirmPassword) {
+                      setErrors(prev => ({ ...prev, confirmPassword: "" }));
+                    }
+                  }}
+                  className="w-full text-gray-800 dark:text-white p-3 pr-10 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400"
+                  disabled={isSubmitting}
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 focus:outline-none"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  disabled={isSubmitting}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+                {errors.confirmPassword && <p className="text-sm text-red-500 mt-1">{errors.confirmPassword}</p>}
               </div>
+
+              <div className="flex gap-2">
+                <select
+                  value={countryCode}
+                  onChange={handleCountryCodeChange}
+                  className="w-1/4 p-3 bg-white-600 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="+1">+1</option>
+                  <option value="+91">+91</option>
+                  <option value="+44">+44</option>
+                </select>
+                <input
+                  type="tel"
+                  placeholder="Mobile Number"
+                  value={mobileNumber}
+                  onChange={handleMobileNumberChange}
+                  className="flex-1 p-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 dark:placeholder-gray-400"
+                  disabled={isSubmitting}
+                  maxLength={10}
+                />
+              </div>
+              {errors.mobileNumber && <p className="text-sm text-red-500 mt-1">{errors.mobileNumber}</p>}
             </div>
 
             <button
               onClick={handleRegister}
               disabled={isSubmitting}
-              className="w-full py-3 rounded-md bg-blue-600 text-white font-semibold text-lg transition duration-300 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed mt-6"
+              className={`w-full py-3 rounded-md bg-purple-600 text-white font-semibold text-lg transition duration-300 shadow-md ${
+                isSubmitting ? "opacity-70 cursor-not-allowed" : "hover:bg-purple-700"
+              }`}
             >
-              {isSubmitting ? "Creating Account..." : "Register"}
+              {isSubmitting ? "Creating Account..." : "Start Free Trial"}
             </button>
 
-            <p className="text-center mt-8 text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-center mt-8 text-sm text-gray-600 dark:text-gray-300">
               Already have an account?{" "}
-              <Link to="/login" className="text-blue-600 dark:text-blue-400 hover:underline">
-                Login here
+              <Link to="/login" className="text-purple-600 dark:text-purple-400 hover:underline">
+                Login
               </Link>
             </p>
           </div>
         </div>
 
         {/* Right Section: Billing Software Image */}
-        <div className="flex-1 bg-gradient-to-br from-blue-500 to-indigo-700 dark:from-gray-800 dark:to-gray-700 p-10 flex flex-col items-center justify-center text-white text-center">
+        <div className="flex-1 bg-gradient-to-br  p-10 flex flex-col items-center justify-center text-center">
           <img
-            src="https://res.cloudinary.com/defxobnc3/image/upload/v1752132668/log_jiy9id.png"
+            src="/8.png"
             alt="Billing Software"
-            className="w-full max-w-sm mb-6 object-contain"
+            className="w-full max-w-sm mb-6 object-contain rounded-[10px]"
           />
-          <h3 className="text-xl font-semibold mb-2">Professional Billing Software</h3>
-          <p className="text-sm opacity-90">Manage your business invoices and payments efficiently</p>
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="absolute bottom-4 left-0 right-0 text-center text-gray-500 dark:text-gray-400 text-sm">
-        &copy; 2025. Your Company Name. All Rights Reserved.
-      </div>
+      {/* Custom CSS to hide scrollbars */}
+      <style jsx>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 };
